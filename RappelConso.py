@@ -3,19 +3,22 @@ import pandas as pd
 import requests
 import plotly.express as px
 
-# Function to load and normalize data from the API
+# Function to load and correctly handle data from the API
 @st.cache(allow_output_mutation=True)
 def load_data(url):
     try:
         response = requests.get(url)
         data = response.json()
-        # Normalizing data based on the JSON structure - adapt as needed based on actual data structure
-        df = pd.json_normalize(data, record_path=['records'], meta=[['fields', 'categorie_de_produit'], 
-                                                                   ['fields', 'sous_categorie_de_produit'], 
-                                                                   ['fields', 'nom_de_la_marque_du_produit'], 
-                                                                   ['fields', 'informations_complementaires_publiques'],
-                                                                   ['fields', 'description']])
-        return df
+        # Properly normalize the data according to its structure
+        # We need to find the right path to the list of records
+        if 'records' in data:
+            # Assuming each record's relevant data is nested under 'fields'
+            records = [record['fields'] for record in data['records'] if 'fields' in record]
+            df = pd.DataFrame(records)
+            return df
+        else:
+            st.error("JSON structure does not contain 'records'")
+            return pd.DataFrame()
     except Exception as e:
         st.error(f"Failed to load data: {e}")
         return pd.DataFrame()  # Return an empty DataFrame in case of an error
@@ -31,26 +34,26 @@ st.title('Visualisation des Rappels de Produits')
 
 # Filter options based on data
 if not df.empty:
-    categories = df['fields.categorie_de_produit'].unique().tolist()
+    categories = df['categorie_de_produit'].unique().tolist()
     selected_category = st.selectbox("Choisissez une catégorie", categories)
 
     # Filters based on selected category
-    subcategories = df[df['fields.categorie_de_produit'] == selected_category]['fields.sous_categorie_de_produit'].unique().tolist()
+    subcategories = df[df['categorie_de_produit'] == selected_category]['sous_categorie_de_produit'].unique().tolist()
     selected_subcategory = st.selectbox("Choisissez une sous-catégorie", subcategories)
 
-    brands = df['fields.nom_de_la_marque_du_produit'].unique().tolist()
+    brands = df['nom_de_la_marque_du_produit'].unique().tolist()
     selected_brand = st.multiselect("Sélectionnez la marque", brands)
 
     # Filtering data based on selections
     filtered_data = df[
-        (df['fields.categorie_de_produit'] == selected_category) &
-        (df['fields.sous_categorie_de_produit'] == selected_subcategory) &
-        (df['fields.nom_de_la_marque_du_produit'].isin(selected_brand))
+        (df['categorie_de_produit'] == selected_category) &
+        (df['sous_categorie_de_produit'] == selected_subcategory) &
+        (df['nom_de_la_marque_du_produit'].isin(selected_brand))
     ]
 
     # Visualization - Bar chart of recalls by sub-category
     st.subheader('Nombre de Rappels par Sous-catégorie')
-    fig = px.bar(filtered_data, x='fields.sous_categorie_de_produit', title='Répartition des rappels par sous-catégorie')
+    fig = px.bar(filtered_data, x='sous_categorie_de_produit', title='Répartition des rappels par sous-catégorie')
     st.plotly_chart(fig)
 
     # Interactive data table
@@ -69,10 +72,10 @@ if not df.empty:
     # Detailed information with an expander
     st.subheader('Informations Complémentaires sur les Rappels')
     for idx, row in filtered_data.iterrows():
-        with st.expander(f"Rappel {idx + 1} - {row['fields.nom_du_produit']}"):
-            st.write(f"**Catégorie:** {row['fields.categorie_de_produit']}")
-            st.write(f"**Sous-catégorie:** {row['fields.sous_categorie_de_produit']}")
-            st.write(f"**Marque:** {row['fields.nom_de_la_marque_du_produit']}")
-            st.write(f"**Description:** {row['fields.description']}")
+        with st.expander(f"Rappel {idx + 1} - {row['nom_du_produit']}"):
+            st.write(f"**Catégorie:** {row['categorie_de_produit']}")
+            st.write(f"**Sous-catégorie:** {row['sous_categorie_de_produit']}")
+            st.write(f"**Marque:** {row['nom_de_la_marque_du_produit']}")
+            st.write(f"**Description:** {row.get('description', 'No description provided')}")
 else:
-    st.write("No data available.")
+    st.write("No data available. Please check the API or data extraction method.")
