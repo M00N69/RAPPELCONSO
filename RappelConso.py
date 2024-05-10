@@ -3,25 +3,27 @@ import pandas as pd
 import requests
 import plotly.express as px
 
-# Function to load data
 @st.cache(allow_output_mutation=True)
-def load_data(url):
-    try:
-        response = requests.get(url)
-        data = response.json()
-        if 'records' in data:
-            records = [record['fields'] for record in data['records'] if 'fields' in record]
-            df = pd.DataFrame(records)
-            return df
-        else:
-            st.error("JSON structure does not contain 'records'")
-            return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Failed to load data: {e}")
-        return pd.DataFrame()
+def load_all_data(base_url, page_size=1000):
+    initial_response = requests.get(f"{base_url}&rows=0")
+    total_records = initial_response.json()['nhits']
+    
+    num_pages = -(-total_records // page_size)  # Calculating the number of pages needed
+    
+    all_records = []
+    for i in range(num_pages):
+        start = i * page_size
+        response = requests.get(f"{base_url}&start={start}&rows={page_size}")
+        all_records.extend(response.json()['records'])
+    
+    # Extracting fields from records and creating DataFrame
+    df = pd.DataFrame([record['fields'] for record in all_records])
+    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'])
+    return df
 
-url = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=&rows=100"
-df = load_data(url)
+# Base URL for API call
+base_url = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation"
+df = load_all_data(base_url)
 
 # Sidebar navigation
 st.sidebar.title("Navigation")
@@ -29,7 +31,7 @@ page = st.sidebar.selectbox("Choose a page:", ["Home", "Visualization", "Details
 
 if page == "Home":
     st.title("Welcome to the Rappels de Produits App")
-    st.write("This application allows you to explore product recall data. Please use the sidebar to navigate between different pages.")
+    st.write("This application allows you to explore comprehensive product recall data across various categories. Use the sidebar to navigate through the app.")
 
 elif page == "Visualization":
     st.title('Visualisation des Rappels de Produits')
