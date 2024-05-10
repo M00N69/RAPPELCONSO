@@ -20,13 +20,12 @@ def load_data(url):
         st.error(f"Failed to load data: {e}")
         return pd.DataFrame()
 
-# Load data
 url = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=&rows=100"
 df = load_data(url)
 
-# Sidebar for navigation
+# Sidebar navigation
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Choose a page:", ["Home", "Visualization", "Details"])
+page = st.sidebar.selectbox("Choose a page:", ["Home", "Visualization", "Details"])
 
 if page == "Home":
     st.title("Welcome to the Rappels de Produits App")
@@ -34,16 +33,15 @@ if page == "Home":
 
 elif page == "Visualization":
     st.title('Visualisation des Rappels de Produits')
-    
     if not df.empty:
         categories = df['categorie_de_produit'].unique().tolist()
-        selected_category = st.selectbox("Choisissez une catégorie", categories)
-
+        selected_category = st.selectbox("Choose a category:", categories)
+        
         subcategories = df[df['categorie_de_produit'] == selected_category]['sous_categorie_de_produit'].unique().tolist()
-        selected_subcategory = st.selectbox("Choisissez une sous-catégorie", subcategories)
-
+        selected_subcategory = st.selectbox("Choose a sub-category:", subcategories)
+        
         brands = df['nom_de_la_marque_du_produit'].unique().tolist()
-        selected_brand = st.multiselect("Sélectionnez la marque", brands)
+        selected_brand = st.multiselect("Select a brand:", brands)
 
         filtered_data = df[
             (df['categorie_de_produit'] == selected_category) &
@@ -54,23 +52,15 @@ elif page == "Visualization":
         if filtered_data.empty:
             st.write("No data available for the selected filters.")
         else:
-            st.subheader('Nombre de Rappels par Sous-catégorie')
-            fig = px.bar(filtered_data, x='sous_categorie_de_produit', title='Répartition des rappels par sous-catégorie')
+            st.subheader('Number of Recalls by Sub-category')
+            fig = px.bar(filtered_data, x='sous_categorie_de_produit', title='Recalls by Sub-category')
             st.plotly_chart(fig)
-
     else:
         st.write("No data available. Please check the API or data extraction method.")
 
 elif page == "Details":
     st.title('Details of the Rappels')
-    if not df.empty and not filtered_data.empty:
-        st.dataframe(filtered_data)
-        st.download_button(
-            "Télécharger les données filtrées",
-            filtered_data.to_csv().encode('utf-8'),
-            "rappels.csv",
-            "text/csv",
-            key='download-csv'
-        )
+    if not df.empty:
+        st.dataframe(df)
     else:
         st.write("No detailed data available to display.")
