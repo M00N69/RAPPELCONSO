@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px  # Make sure this line is added
 import requests
 from datetime import datetime
 from dateutil.parser import parse
