@@ -15,7 +15,7 @@ DATE_FORMAT = '%A %d %B %Y'
 # **Important:** 
 # 1. Replace 'YOUR_API_KEY' with your actual API key from Google.
 # 2. Ensure you have the `google-generativeai` package installed: `pip install google-generativeai`
-Palm.configure(api_key='YOUR_API_KEY')
+Palm.configure(api_key='AIzaSyCJlVZU5g79CLjE7Lug8pInbXOw6c0DAJg')
 
 
 # --- Helper Functions ---
