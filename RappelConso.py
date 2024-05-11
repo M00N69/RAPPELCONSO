@@ -173,8 +173,30 @@ def display_visualizations(data):
         )
 
 def get_llm_response(prompt, data):
-    """Gets a response from Gemini Pro, incorporating the provided data."""
-    context = f"The following is information about food product recalls in France from the RappelConso database: {data.to_string()}\n\n"
+    """Gets a response from Gemini Pro, incorporating relevant data."""
+
+    # 1. Basic Keyword Matching (You can improve this)
+    keywords = prompt.lower().split() # Get keywords from the question
+
+    relevant_columns = [
+        'noms_des_modeles_ou_references',
+        'nom_de_la_marque_du_produit',
+        'risques_encourus_par_le_consommateur',
+        'sous_categorie_de_produit'
+    ]  # Columns to potentially include
+
+    selected_rows = data[data[relevant_columns].apply(
+        lambda row: any(keyword in str(val).lower() for keyword in keywords for val in row), 
+        axis=1
+    )]
+
+    # 2. Limit the number of rows included
+    max_rows = 5 
+    if len(selected_rows) > max_rows:
+        selected_rows = selected_rows.head(max_rows)
+
+    # 3. Create Context 
+    context = f"The following is information about food product recalls in France from the RappelConso database, relevant to your query: {selected_rows.to_string()}\n\n"
     full_prompt = context + prompt
 
     response = genai.generate_text(
