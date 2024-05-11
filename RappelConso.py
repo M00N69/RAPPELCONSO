@@ -37,12 +37,31 @@ filtered_data = filtered_data[(filtered_data['date_de_publication'] >= selected_
 if page == "Accueil":
     st.title("Accueil - Dashboard des Rappels de Produits")
     st.write("Ce tableau de bord présente uniquement les produits de la catégorie 'Alimentation'.")
-    st.write("Nombre de rappels sélectionnés:", len(filtered_data))
+
+    # Page-specific filters after title
+    selected_subcategories = st.multiselect("Sous-catégorie de produit", options=filtered_data['sous_categorie_de_produit'].unique())
+    selected_risks = st.multiselect("Risques encourus par le consommateur", options=filtered_data['risques_encourus_par_le_consommateur'].unique())
+    if selected_subcategories:
+        filtered_data = filtered_data[filtered_data['sous_categorie_de_produit'].isin(selected_subcategories)]
+    if selected_risks:
+        filtered_data = filtered_data[filtered_data['risques_encourus_par_le_consommateur'].isin(selected_risks)]
+
+    # Display metrics
+    active_recalls = filtered_data[filtered_data['date_de_fin_de_la_procedure_de_rappel'] > datetime.now()]
+    st.metric("Nombre de rappels dans la période sélectionnée", len(filtered_data))
+    st.metric("Rappels actifs", len(active_recalls))
     active_recalls = filtered_data[filtered_data['date_de_fin_de_la_procedure_de_rappel'] >= datetime.now()]
     st.write("Nombre de rappels actifs:", len(active_recalls))
-    recent_recalls = filtered_data.nlargest(10, 'date_de_publication')[['liens_vers_les_images', 'date_de_publication', 'noms_des_modeles_ou_references', 'nom_de_la_marque_du_produit', 'lien_vers_affichette_pdf']]
-    st.dataframe(recent_recalls.style.format({'lien_vers_affichette_pdf': lambda x: f'[Document]({x})'}))
+    # Display the last 10 recalls
+    df['date_de_publication'] = df['date_de_publication'].dt.strftime('%d/%m/%Y')  # Format date
+    df = df.nlargest(10, 'date_de_publication')
+    df['lien_vers_affichette_pdf'] = df['lien_vers_affichette_pdf'].apply(lambda x: f"[📄]({x})")
+    st.dataframe(df[['liens_vers_les_images', 'date_de_publication', 'noms_des_modeles_ou_references', 'nom_de_la_marque_du_produit', 'lien_vers_affichette_pdf']])
 
+# Alternative for displaying images if direct embedding is problematic
+st.write("Cliquez sur les liens pour voir les images des produits rappelés:")
+for index, row in df.iterrows():
+    st.markdown(f"[![Produit]({row['liens_vers_les_images']})]({row['liens_vers_les_images']})", unsafe_allow_html=True)
 elif page == "Visualisation":
     st.title("Visualisation des Rappels de Produits")
     risques_pie = px.pie(filtered_data, names='risques_encourus_par_le_consommateur', title='Risques encourus par les consommateurs')
