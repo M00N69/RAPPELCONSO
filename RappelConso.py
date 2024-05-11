@@ -11,37 +11,28 @@ DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappel
 START_DATE = pd.Timestamp('2021-04-01')
 DATE_FORMAT = '%A %d %B %Y'
 
-# --- Gemini Pro API Settings ---
-GEMINI_API_KEY = "AIzaSyCJlVZU5g79CLjE7Lug8pInbXOw6c0DAJg"  # Replace with your actual API key
-GEMINI_MODEL_NAME = "gemini-1.5-pro-latest"  # Or your preferred model
+# --- Gemini Pro API Settings from Streamlit Secrets ---
+api_key = st.secrets["api_key"]
+genai.configure(api_key=api_key)
 
 # --- Gemini Configuration ---
-generation_config = genai.GenerationConfig(
-    temperature=0.7,  # Adjust for creativity
-    max_output_tokens=256  # Adjust the maximum response length
-)
+generation_config = {
+    "temperature": 0.7,  # Adjust for creativity
+    "top_p": 0.4,
+    "top_k": 32,
+    "max_output_tokens": 256,  # Adjust for response length
+}
 
-# Corrected Safety Settings
-safety_settings = genai.SafetySettings(
-    harmful_categories=[
-        genai.HarmCategory.HATE_SPEECH,
-        genai.HarmCategory.SEXUALLY_EXPLICIT,
-        genai.HarmCategory.VIOLENCE
-    ],
-    harm_block_threshold=0.8,  # Adjust threshold as needed
-    bias_block_threshold=0.8  # Adjust threshold as needed
-)
-
-system_instruction = """
-You are a helpful and informative chatbot that answers questions about food product recalls in France.
-"""
+# Updated System Instruction
+system_instruction = """You are a helpful and informative chatbot that answers questions about food product recalls in France, using the RappelConso database. 
+Focus on providing information about recall dates, products, brands, risks, and categories. 
+Avoid making subjective statements or offering opinions. Base your responses strictly on the data provided."""
 
 # Create the Gemini Pro Model instance
 model = genai.GenerativeModel(
-    model_name=GEMINI_MODEL_NAME,
+    model_name="gemini-1.5-pro-latest",
     generation_config=generation_config,
     system_instruction=system_instruction,
-    safety_settings=safety_settings
 )
 
 # --- Helper Functions ---
@@ -188,9 +179,9 @@ def display_visualizations(data):
             "Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés."
         )
 
-def get_llm_response(prompt, data, model=model): # Use the global model instance
+def get_llm_response(prompt, data, model=model):
     """Gets a response from Gemini Pro, incorporating the provided data."""
-    context = f"Voici des informations sur les rappels de produits alimentaires en France: {data.to_string()}\n\n"
+    context = f"The following is information about food product recalls in France from the RappelConso database: {data.to_string()}\n\n"
     full_prompt = context + prompt
     response = model.generate_text(prompt=full_prompt)
     return response.result
