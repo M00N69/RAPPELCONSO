@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px  # Make sure this line is added
 import requests
 from datetime import datetime
+import locale
 
 # Setting the page to wide mode
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
