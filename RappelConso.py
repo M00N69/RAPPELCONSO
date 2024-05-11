@@ -7,6 +7,8 @@ from datetime import datetime
 # Setting the page to wide mode
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
+# Setting the locale to French to interpret days and months in French
+locale.setlocale(locale.LC_TIME, 'fr_FR')
 
 # Data loading and cleaning function
 @st.cache(allow_output_mutation=True)
@@ -16,12 +18,22 @@ def load_data():
     data = response.json()
     records = [rec['fields'] for rec in data['records']]
     df = pd.DataFrame(records)
-    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
-    df['date_de_fin_de_la_procedure_de_rappel'] = pd.to_datetime(df['date_de_fin_de_la_procedure_de_rappel'], errors='coerce')
-    df = df[df['date_de_publication'] >= '2021-04-01']  # Filtering out older dates
-    return df
 
-df = load_data()
+    # Assuming 'date_de_publication' is in standard ISO format; no change needed
+    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
+
+    # Parse 'date_de_fin_de_la_procedure_de_rappel' assuming it's in the specific French format
+    df['date_de_fin_de_la_procedure_de_rappel'] = pd.to_datetime(
+        df['date_de_fin_de_la_procedure_de_rappel'],
+        format='%A %d %B %Y',  # French date format
+        errors='coerce',  # Handle any errors in conversion by returning NaT (Not a Time)
+        exact=False  # Allow format to match anywhere in the string
+    )
+
+    # Filter out entries before April 1st, 2021
+    df = df[df['date_de_publication'] >= '2021-04-01']
+
+    return df
 
 # Sidebar for navigation
 st.sidebar.title("Navigation et Filtres")
