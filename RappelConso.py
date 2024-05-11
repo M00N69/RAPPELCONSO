@@ -100,8 +100,6 @@ elif page == "Visualisation":
         else:
             st.error("No significant product categories found. Adjust your filters or data processing.")
 
-    else:
-        st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
 
         # Bar Chart for Monthly Recalls
         filtered_data['month'] = filtered_data['date_de_publication'].dt.strftime('%Y-%m')
@@ -110,7 +108,7 @@ elif page == "Visualisation":
                                      labels={'month': 'Mois', 'count': 'Nombre de rappels'},
                                      title='Nombre de rappels par mois')
         st.plotly_chart(fig_monthly_recalls, use_container_width=True)
-else:
+    else:
         st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
 
 elif page == "Détails":
