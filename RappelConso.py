@@ -6,29 +6,34 @@ from datetime import datetime
 from dateutil.parser import parse
 import google.generativeai as genai
 
-def get_gemini_response(prompt, api_key, model_id):
-    """Gets a response from Gemini Pro using the google.generativeai library."""
-    genai.configure(api_key=api_key)  # Set your API key
-
-    response = genai.generate_text(
-        model=model_id,
-        prompt=prompt,
-        temperature=0.7,  # Adjust as needed
-        max_output_tokens=256  # Adjust as needed
-    )
-
-    return response.result # Access the text result directly
-
 # --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
 START_DATE = pd.Timestamp('2021-04-01')
 DATE_FORMAT = '%A %d %B %Y'
 
 # --- Gemini Pro API Settings ---
-# Replace with your actual API key and model ID:
-GEMINI_API_KEY = "AIzaSyCJlVZU5g79CLjE7Lug8pInbXOw6c0DAJg" 
-GEMINI_MODEL_ID = "gemini-pro" 
+GEMINI_API_KEY = "AIzaSyCJlVZU5g79CLjE7Lug8pInbXOw6c0DAJg"  # Replace with your actual API key
+GEMINI_MODEL_NAME = "gemini-1.5-pro-latest"  # Or your preferred model
 
+# --- Gemini Configuration ---
+generation_config = genai.GenerationConfig(
+    temperature=0.7,  # Adjust for creativity
+    max_output_tokens=256  # Adjust the maximum response length
+)
+
+safety_settings = genai.SafetySettings()
+
+system_instruction = """
+You are a helpful and informative chatbot that answers questions about food product recalls in France.
+"""
+
+# Create the Gemini Pro Model instance
+model = genai.GenerativeModel(
+    model_name=GEMINI_MODEL_NAME,
+    generation_config=generation_config,
+    system_instruction=system_instruction,
+    safety_settings=safety_settings
+)
 
 # --- Helper Functions ---
 
@@ -39,7 +44,7 @@ def safe_parse_date(date_str, fmt=DATE_FORMAT):
     except ValueError:
         return parse(date_str, dayfirst=True, yearfirst=False)
 
-@st.cache_data 
+@st.cache_data
 def load_data(url=DATA_URL):
     """Loads and preprocesses the recall data."""
     response = requests.get(url)
@@ -47,33 +52,45 @@ def load_data(url=DATA_URL):
     df = pd.DataFrame([rec['fields'] for rec in data['records']])
 
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
-    df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
+    df['date_de_fin_de_la_procedure_de_rappel'] = df[
+        'date_de_fin_de_la_procedure_de_rappel'
+    ].apply(safe_parse_date)
     df = df[df['date_de_publication'] >= START_DATE]
     return df
 
 def filter_data(df, year, date_range, subcategories, risks, search_term):
     """Filters the data based on user selections and search term."""
     filtered_data = df[df['date_de_publication'].dt.year == year]
-    filtered_data = filtered_data[(filtered_data['date_de_publication'] >= date_range[0]) &
-                                  (filtered_data['date_de_publication'] <= date_range[1])]
+    filtered_data = filtered_data[
+        (filtered_data['date_de_publication'] >= date_range[0])
+        & (filtered_data['date_de_publication'] <= date_range[1])
+    ]
     if subcategories:
-        filtered_data = filtered_data[filtered_data['sous_categorie_de_produit'].isin(subcategories)]
+        filtered_data = filtered_data[
+            filtered_data['sous_categorie_de_produit'].isin(subcategories)
+        ]
     if risks:
-        filtered_data = filtered_data[filtered_data['risques_encourus_par_le_consommateur'].isin(risks)]
+        filtered_data = filtered_data[
+            filtered_data['risques_encourus_par_le_consommateur'].isin(risks)
+        ]
 
     if search_term:
-        filtered_data = filtered_data[filtered_data.apply(lambda row: 
-            row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
+        filtered_data = filtered_data[
+            filtered_data.apply(
+                lambda row: row.astype(str)
+                .str.contains(search_term, case=False)
+                .any(),
+                axis=1,
+            )
+        ]
 
     return filtered_data
-
 
 def display_metrics(data):
     """Displays key metrics about the recalls."""
     active_recalls = data[data['date_de_fin_de_la_procedure_de_rappel'] > datetime.now()]
     st.metric("Rappels dans la période sélectionnée", len(data))
     st.metric("Rappels actifs", len(active_recalls))
-
 
 def display_recent_recalls(data, num_columns=5):
     """Displays recent recalls in a grid format."""
@@ -84,88 +101,90 @@ def display_recent_recalls(data, num_columns=5):
 
         for i in range(num_rows):
             cols = st.columns(num_columns)
-            for col, idx in zip(cols, range(i * num_columns, min((i + 1) * num_columns, len(recent_recalls)))):
+            for col, idx in zip(
+                cols, range(i * num_columns, min((i + 1) * num_columns, len(recent_recalls)))
+            ):
                 if idx < len(recent_recalls):
                     row = recent_recalls.iloc[idx]
-                    col.image(row['liens_vers_les_images'], 
-                              caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})", 
-                              width=150)
-                    col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
+                    col.image(
+                        row['liens_vers_les_images'],
+                        caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})",
+                        width=150,
+                    )
+                    col.markdown(
+                        f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})",
+                        unsafe_allow_html=True,
+                    )
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
-
 
 def display_visualizations(data):
     """Creates and displays the visualizations."""
     if not data.empty:
-        value_counts = data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
+        value_counts = (
+            data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
+        )
         significant_categories = value_counts[value_counts >= 2]
-        filtered_categories_data = data[data['sous_categorie_de_produit'].isin(significant_categories.index)]
+        filtered_categories_data = data[
+            data['sous_categorie_de_produit'].isin(significant_categories.index)
+        ]
 
-        legal_counts = data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
+        legal_counts = (
+            data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
+        )
         significant_legal = legal_counts[legal_counts >= 2]
-        filtered_legal_data = data[data['nature_juridique_du_rappel'].isin(significant_legal.index)]
+        filtered_legal_data = data[
+            data['nature_juridique_du_rappel'].isin(significant_legal.index)
+        ]
 
         if not filtered_categories_data.empty and not filtered_legal_data.empty:
             col1, col2 = st.columns([2, 1])
 
             with col1:
-                fig_products = px.pie(filtered_categories_data, 
-                                      names='sous_categorie_de_produit',
-                                      title='Produits',
-                                      color_discrete_sequence=px.colors.sequential.RdBu,
-                                      width=800, 
-                                      height=600)
+                fig_products = px.pie(
+                    filtered_categories_data,
+                    names='sous_categorie_de_produit',
+                    title='Produits',
+                    color_discrete_sequence=px.colors.sequential.RdBu,
+                    width=800,
+                    height=600,
+                )
                 st.plotly_chart(fig_products, use_container_width=False)
 
             with col2:
-                fig_legal = px.pie(filtered_legal_data, 
-                                   names='nature_juridique_du_rappel',
-                                   title='Nature juridique des rappels',
-                                   color_discrete_sequence=px.colors.sequential.RdBu,
-                                   width=800, 
-                                   height=600)
+                fig_legal = px.pie(
+                    filtered_legal_data,
+                    names='nature_juridique_du_rappel',
+                    title='Nature juridique des rappels',
+                    color_discrete_sequence=px.colors.sequential.RdBu,
+                    width=800,
+                    height=600,
+                )
                 st.plotly_chart(fig_legal, use_container_width=False)
 
             data['month'] = data['date_de_publication'].dt.strftime('%Y-%m')
             recalls_per_month = data.groupby('month').size().reset_index(name='counts')
-            fig_monthly_recalls = px.bar(recalls_per_month, 
-                                         x='month', y='counts',
-                                         labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
-                                         title='Nombre de rappels par mois')
+            fig_monthly_recalls = px.bar(
+                recalls_per_month,
+                x='month',
+                y='counts',
+                labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
+                title='Nombre de rappels par mois',
+            )
             st.plotly_chart(fig_monthly_recalls, use_container_width=True)
         else:
             st.error("Données insuffisantes pour un ou plusieurs graphiques.")
     else:
-        st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
+        st.error(
+            "Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés."
+        )
 
-def get_gemini_response(prompt, api_key, model_id):
-    """Gets a response from Gemini Pro using the REST API."""
-    url = f"https://api.generativeai.google.com/v1/models/{model_id}:generateText"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "prompt": {
-            "text": prompt
-        },
-        "temperature": 0.7,  # Adjust as needed
-        "max_output_tokens": 256  # Adjust as needed
-    }
-
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code == 200:
-        return response.json()["candidates"][0]["output"]
-    else:
-        raise Exception(f"Gemini API request failed with status {response.status_code}: {response.text}")
-
-def get_llm_response(prompt, data, api_key=GEMINI_API_KEY, model_id=GEMINI_MODEL_ID):
+def get_llm_response(prompt, data, model=model): # Use the global model instance
     """Gets a response from Gemini Pro, incorporating the provided data."""
     context = f"Voici des informations sur les rappels de produits alimentaires en France: {data.to_string()}\n\n"
     full_prompt = context + prompt
-    response = get_gemini_response(full_prompt, api_key, model_id)
-    return response
+    response = model.generate_text(prompt=full_prompt)
+    return response.result
 
 # --- Main App ---
 
@@ -177,60 +196,88 @@ df = load_data()
 
 # --- Sidebar ---
 st.sidebar.title("Navigation et Filtres")
-page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails", "Chatbot"])
+page = st.sidebar.selectbox(
+    "Choisir une page", ["Accueil", "Visualisation", "Détails", "Chatbot"]
+)
 
 # Year filter
-selected_year = st.sidebar.selectbox('Sélectionner l\'année', 
-                                     options=sorted(df['date_de_publication'].dt.year.unique()))
+selected_year = st.sidebar.selectbox(
+    'Sélectionner l\'année', options=sorted(df['date_de_publication'].dt.year.unique())
+)
 
 # Date range slider
 filtered_data = df[df['date_de_publication'].dt.year == selected_year]
-min_date, max_date = filtered_data['date_de_publication'].min(), filtered_data['date_de_publication'].max()
-selected_dates = st.sidebar.slider("Sélectionner la plage de dates", 
-                                   min_value=min_date.to_pydatetime(), 
-                                   max_value=max_date.to_pydatetime(), 
-                                   value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
+min_date, max_date = (
+    filtered_data['date_de_publication'].min(),
+    filtered_data['date_de_publication'].max(),
+)
+selected_dates = st.sidebar.slider(
+    "Sélectionner la plage de dates",
+    min_value=min_date.to_pydatetime(),
+    max_value=max_date.to_pydatetime(),
+    value=(min_date.to_pydatetime(), max_date.to_pydatetime()),
+)
 
 # Sub-category and risks filters
-selected_subcategories = st.sidebar.multiselect("Sous-catégories", 
-                                               options=df['sous_categorie_de_produit'].unique(),
-                                               default=df['sous_categorie_de_produit'].unique())
-selected_risks = st.sidebar.multiselect("Risques", 
-                                         options=df['risques_encourus_par_le_consommateur'].unique(),
-                                         default=df['risques_encourus_par_le_consommateur'].unique())
-
+selected_subcategories = st.sidebar.multiselect(
+    "Sous-catégories",
+    options=df['sous_categorie_de_produit'].unique(),
+    default=df['sous_categorie_de_produit'].unique(),
+)
+selected_risks = st.sidebar.multiselect(
+    "Risques",
+    options=df['risques_encourus_par_le_consommateur'].unique(),
+    default=df['risques_encourus_par_le_consommateur'].unique(),
+)
 
 # --- Search Bar ---
 search_term = st.text_input("Rechercher (Nom du produit, marque, etc.)", "")
 
 # --- Page Content ---
-filtered_data = filter_data(df, selected_year, selected_dates, selected_subcategories, selected_risks, search_term)
+filtered_data = filter_data(
+    df,
+    selected_year,
+    selected_dates,
+    selected_subcategories,
+    selected_risks,
+    search_term,
+)
 
 if page == "Accueil":
     st.title("Accueil - Dashboard des Rappels de Produits")
-    st.write("Ce tableau de bord présente uniquement les produits de la catégorie 'Alimentation'.")
-    
+    st.write(
+        "Ce tableau de bord présente uniquement les produits de la catégorie 'Alimentation'."
+    )
+
     display_metrics(filtered_data)
     display_recent_recalls(filtered_data)
 
 elif page == "Visualisation":
     st.title("Visualisation des Rappels de Produits")
-    st.write("Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs.")
+    st.write(
+        "Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs."
+    )
     display_visualizations(filtered_data)
 
 elif page == "Détails":
     st.title("Détails des Rappels de Produits")
-    st.write("Consultez ici un tableau détaillé des rappels de produits, incluant toutes les informations disponibles.")
+    st.write(
+        "Consultez ici un tableau détaillé des rappels de produits, incluant toutes les informations disponibles."
+    )
 
     if not filtered_data.empty:
         st.dataframe(filtered_data)
         csv = filtered_data.to_csv(index=False).encode('utf-8')
-        st.download_button(label="Télécharger les données filtrées",
-                           data=csv,
-                           file_name='details_rappels.csv',
-                           mime='text/csv')
+        st.download_button(
+            label="Télécharger les données filtrées",
+            data=csv,
+            file_name='details_rappels.csv',
+            mime='text/csv',
+        )
     else:
-        st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
+        st.error(
+            "Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année."
+        )
 
 elif page == "Chatbot":
     st.title("Posez vos questions sur les rappels de produits")
