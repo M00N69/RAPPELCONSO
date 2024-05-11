@@ -4,11 +4,19 @@ import plotly.express as px
 import requests
 from datetime import datetime
 from dateutil.parser import parse
+from google.generativeai import Palm  # For using Gemini Pro
 
 # Constants
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
 START_DATE = pd.Timestamp('2021-04-01')
 DATE_FORMAT = '%A %d %B %Y'
+
+# --- Google Gemini Pro Setup ---
+# **Important:** 
+# 1. Replace 'YOUR_API_KEY' with your actual API key from Google.
+# 2. Ensure you have the `google-generativeai` package installed: `pip install google-generativeai`
+Palm.configure(api_key='YOUR_API_KEY')
+
 
 # --- Helper Functions ---
 
@@ -42,7 +50,6 @@ def filter_data(df, year, date_range, subcategories, risks, search_term):
         filtered_data = filtered_data[filtered_data['risques_encourus_par_le_consommateur'].isin(risks)]
 
     if search_term:
-        # Search across relevant columns - customize as needed
         filtered_data = filtered_data[filtered_data.apply(lambda row: 
             row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
 
@@ -120,6 +127,21 @@ def display_visualizations(data):
     else:
         st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
 
+def get_llm_response(prompt, data):
+    """
+    Gets a response from Gemini Pro, incorporating the provided data. 
+    """
+    context = f"Voici des informations sur les rappels de produits alimentaires en France: {data.to_string()}\n\n"
+    full_prompt = context + prompt
+
+    response = Palm.generate_text(
+        model='models/chat-bison-001', 
+        prompt=full_prompt,
+        temperature=0.7, # Adjust for creativity
+        max_output_tokens=256 # Adjust output length 
+    )
+    return response.result
+
 # --- Main App ---
 
 # Page configuration
@@ -130,7 +152,7 @@ df = load_data()
 
 # --- Sidebar ---
 st.sidebar.title("Navigation et Filtres")
-page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails"])
+page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails", "Chatbot"])
 
 # Year filter
 selected_year = st.sidebar.selectbox('Sélectionner l\'année', 
@@ -184,3 +206,15 @@ elif page == "Détails":
                            mime='text/csv')
     else:
         st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
+
+elif page == "Chatbot":
+    st.title("Posez vos questions sur les rappels de produits")
+
+    user_question = st.text_input("Votre question:")
+    if st.button("Poser"):
+        if user_question:
+            with st.spinner("Gemini Pro réfléchit..."):
+                response = get_llm_response(user_question, filtered_data)
+                st.write(response)
+        else:
+            st.warning("Veuillez saisir une question.")
