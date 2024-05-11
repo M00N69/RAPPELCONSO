@@ -183,8 +183,11 @@ def get_llm_response(prompt, data, model=model):
     """Gets a response from Gemini Pro, incorporating the provided data."""
     context = f"The following is information about food product recalls in France from the RappelConso database: {data.to_string()}\n\n"
     full_prompt = context + prompt
-    response = model.generate_text(prompt=full_prompt)
-    return response.result
+
+    # Use model.generate() 
+    response = model.generate(prompt=full_prompt)  
+
+    return response.text  # Access the generated text
 
 # --- Main App ---
 
