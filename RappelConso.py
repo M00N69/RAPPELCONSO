@@ -4,6 +4,9 @@ import plotly.express as px  # Make sure this line is added
 import requests
 from datetime import datetime
 
+# Setting the page to wide mode
+st.set_page_config(layout="wide")
+
 # Data loading and cleaning function
 @st.cache(allow_output_mutation=True)
 def load_data():
