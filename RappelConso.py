@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px  # Make sure this line is added
 import requests
 from datetime import datetime
 from dateutil.parser import parse
@@ -8,17 +7,17 @@ from dateutil.parser import parse
 # Setting the page to wide mode
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
-# Data loading and cleaning function
-@st.cache(allow_output_mutation=True)
 def safe_parse_date(date_str, fmt='%A %d %B %Y'):
     """
-    Attempts to parse a date with a given format and falls back to dateutil's parser if the format fails.
+    Attempts to parse a date with a given format and falls back to using dateutil's parser if the format fails.
     """
     try:
         return pd.to_datetime(date_str, format=fmt, errors='coerce')
     except ValueError:
+        # Fallback to dateutil parsing which is more flexible
         return parse(date_str, dayfirst=True, yearfirst=False)
 
+@st.cache(allow_output_mutation=True)
 def load_data():
     url = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
     response = requests.get(url)
@@ -26,16 +25,19 @@ def load_data():
     records = [rec['fields'] for rec in data['records']]
     df = pd.DataFrame(records)
 
-    # Convert 'date_de_publication' to datetime, assuming ISO format.
+    # Convert 'date_de_publication' to datetime, assuming it's in ISO format.
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
 
-    # Convert 'date_de_fin_de_la_procedure_de_rappel' using a safe parsing function for French dates.
-    df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(lambda x: safe_parse_date(x))
+    # Convert 'date_de_fin_de_la_procedure_de_rappel' using a safe parsing function for potentially non-standard French dates.
+    df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
 
-    # Filter to include only records from April 1, 2021, onward.
+    # Filter the data to include only records from April 1, 2021, onward.
     df = df[df['date_de_publication'] >= pd.Timestamp('2021-04-01')]
 
     return df
+
+# Load data
+df = load_data()
 
 # Sidebar for navigation
 st.sidebar.title("Navigation et Filtres")
