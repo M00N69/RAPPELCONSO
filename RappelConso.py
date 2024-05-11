@@ -4,6 +4,20 @@ import plotly.express as px
 import requests
 from datetime import datetime
 from dateutil.parser import parse
+import google.generativeai as genai
+
+def get_gemini_response(prompt, api_key, model_id):
+    """Gets a response from Gemini Pro using the google.generativeai library."""
+    genai.configure(api_key=api_key)  # Set your API key
+
+    response = genai.generate_text(
+        model=model_id,
+        prompt=prompt,
+        temperature=0.7,  # Adjust as needed
+        max_output_tokens=256  # Adjust as needed
+    )
+
+    return response.result # Access the text result directly
 
 # --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
