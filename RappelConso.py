@@ -5,7 +5,8 @@ import requests
 from datetime import datetime
 
 # Setting the page to wide mode
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", initial_sidebar_state="expanded")
+
 
 # Data loading and cleaning function
 @st.cache(allow_output_mutation=True)
