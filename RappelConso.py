@@ -66,8 +66,8 @@ elif page == "Visualisation":
 
     if not filtered_data.empty:
         # Pie Chart for Risks Incurred by Consumers
-        fig_risks = px.pie(filtered_data, names='risques_encourus_par_le_consommateur',
-                           title='Risques encourus par les consommateurs',
+        fig_risks = px.pie(filtered_data, names='sous_categorie_de_produit',
+                           title='Produits',
                            color_discrete_sequence=px.colors.sequential.RdBu)
         st.plotly_chart(fig_risks, use_container_width=True)
 
