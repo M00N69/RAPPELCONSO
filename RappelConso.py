@@ -73,7 +73,7 @@ if page == "Accueil":
             for col, idx in zip(cols, range(i * num_columns, min((i + 1) * num_columns, len(recent_recalls)))):
                 if idx < len(recent_recalls):
                     row = recent_recalls.iloc[idx]
-                    col.image(row['liens_vers_les_images'], caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})", width=300)
+                    col.image(row['liens_vers_les_images'], caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})", width=150)
                     col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
