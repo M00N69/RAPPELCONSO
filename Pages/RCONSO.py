@@ -57,11 +57,26 @@ if page == "Accueil":
         st.metric("Nombre de rappels dans la période sélectionnée", len(filtered_data))
         st.metric("Rappels actifs", len(active_recalls))
 
-        # Displaying last 10 recalls
+        # Displaying the last 10 recalls in a grid format
+    if not filtered_data.empty:
+        st.subheader("Derniers Rappels")
         recent_recalls = filtered_data.nlargest(10, 'date_de_publication')
-        for index, row in recent_recalls.iterrows():
-            st.image(row['liens_vers_les_images'], caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})", width=300)
-            st.markdown(f"[Document]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
+        
+        # Calculate how many columns per row are needed
+        num_columns = 5  # or any number you want
+        num_rows = (len(recent_recalls) + num_columns - 1) // num_columns  # Round up to ensure all recalls are displayed
+
+        # Iterate over the number of rows needed
+        for i in range(num_rows):
+            cols = st.columns(num_columns)
+            # For each row, display the recall in each column
+            for col, idx in zip(cols, range(i * num_columns, min((i + 1) * num_columns, len(recent_recalls)))):
+                if idx < len(recent_recalls):
+                    row = recent_recalls.iloc[idx]
+                    col.image(row['liens_vers_les_images'], caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})", width=300)
+                    col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
+    else:
+        st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
 # Additional pages can be set up similarly
 elif page == "Visualisation":
