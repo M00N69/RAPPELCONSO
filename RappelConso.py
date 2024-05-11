@@ -184,10 +184,11 @@ def get_llm_response(prompt, data, model=model):
     context = f"The following is information about food product recalls in France from the RappelConso database: {data.to_string()}\n\n"
     full_prompt = context + prompt
 
-    # Call the model directly to generate text
-    response = model(prompt=full_prompt)
+    # Generate content using the generate_content() method
+    response = model.generate_content(prompt=full_prompt)
 
-    return response.text  # Access the generated text
+    # Access the generated text from the first candidate
+    return response.candidates[0].text
 
 # --- Main App ---
 
