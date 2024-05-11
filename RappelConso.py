@@ -13,19 +13,15 @@ DATE_FORMAT = '%A %d %B %Y'
 # --- Helper Functions ---
 
 def safe_parse_date(date_str, fmt=DATE_FORMAT):
-    """
-    Parses a date string, attempting a specific format first, then falling back to dateutil.
-    """
+    """Parses a date string, attempting a specific format first, then falling back to dateutil."""
     try:
         return pd.to_datetime(date_str, format=fmt, errors='coerce')
     except ValueError:
         return parse(date_str, dayfirst=True, yearfirst=False)
 
-@st.cache_data  # Use st.cache_data for Streamlit 1.14+
+@st.cache_data 
 def load_data(url=DATA_URL):
-    """
-    Loads and preprocesses the recall data.
-    """
+    """Loads and preprocesses the recall data."""
     response = requests.get(url)
     data = response.json()
     df = pd.DataFrame([rec['fields'] for rec in data['records']])
@@ -35,11 +31,8 @@ def load_data(url=DATA_URL):
     df = df[df['date_de_publication'] >= START_DATE]
     return df
 
-
-def filter_data(df, year, date_range, subcategories, risks):
-    """
-    Filters the data based on user selections.
-    """
+def filter_data(df, year, date_range, subcategories, risks, search_term):
+    """Filters the data based on user selections and search term."""
     filtered_data = df[df['date_de_publication'].dt.year == year]
     filtered_data = filtered_data[(filtered_data['date_de_publication'] >= date_range[0]) &
                                   (filtered_data['date_de_publication'] <= date_range[1])]
@@ -47,22 +40,24 @@ def filter_data(df, year, date_range, subcategories, risks):
         filtered_data = filtered_data[filtered_data['sous_categorie_de_produit'].isin(subcategories)]
     if risks:
         filtered_data = filtered_data[filtered_data['risques_encourus_par_le_consommateur'].isin(risks)]
+
+    if search_term:
+        # Search across relevant columns - customize as needed
+        filtered_data = filtered_data[filtered_data.apply(lambda row: 
+            row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
+
     return filtered_data
 
 
 def display_metrics(data):
-    """
-    Displays key metrics about the recalls.
-    """
+    """Displays key metrics about the recalls."""
     active_recalls = data[data['date_de_fin_de_la_procedure_de_rappel'] > datetime.now()]
     st.metric("Rappels dans la période sélectionnée", len(data))
     st.metric("Rappels actifs", len(active_recalls))
 
 
 def display_recent_recalls(data, num_columns=5):
-    """
-    Displays recent recalls in a grid format.
-    """
+    """Displays recent recalls in a grid format."""
     if not data.empty:
         st.subheader("Derniers Rappels")
         recent_recalls = data.nlargest(10, 'date_de_publication')
@@ -82,9 +77,7 @@ def display_recent_recalls(data, num_columns=5):
 
 
 def display_visualizations(data):
-    """
-    Creates and displays the visualizations.
-    """
+    """Creates and displays the visualizations."""
     if not data.empty:
         value_counts = data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
         significant_categories = value_counts[value_counts >= 2]
@@ -159,8 +152,12 @@ selected_risks = st.sidebar.multiselect("Risques",
                                          options=df['risques_encourus_par_le_consommateur'].unique(),
                                          default=df['risques_encourus_par_le_consommateur'].unique())
 
+
+# --- Search Bar ---
+search_term = st.text_input("Rechercher (Nom du produit, marque, etc.)", "")
+
 # --- Page Content ---
-filtered_data = filter_data(df, selected_year, selected_dates, selected_subcategories, selected_risks)
+filtered_data = filter_data(df, selected_year, selected_dates, selected_subcategories, selected_risks, search_term)
 
 if page == "Accueil":
     st.title("Accueil - Dashboard des Rappels de Produits")
