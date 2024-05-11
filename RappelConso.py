@@ -94,8 +94,8 @@ elif page == "Visualisation":
                 fig_legal = px.pie(filtered_legal_data, names='nature_juridique_du_rappel',
                                    title='Nature juridique des rappels',
                                    color_discrete_sequence=px.colors.sequential.RdBu,
-                                   width=400,
-                                   height=300)
+                                   width=800,
+                                   height=600)
                 st.plotly_chart(fig_legal, use_container_width=False)
 
             # Monthly Recalls Bar Chart
