@@ -3,12 +3,21 @@ import pandas as pd
 import plotly.express as px  # Make sure this line is added
 import requests
 from datetime import datetime
+from dateutil.parser import parse
 
 # Setting the page to wide mode
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
+def safe_parse_date(date_str, fmt='%A %d %B %Y'):
+    """
+    Attempts to parse a date with a given format and falls back to using dateutil's parser if the format fails.
+    """
+    try:
+        return pd.to_datetime(date_str, format=fmt, errors='coerce')
+    except ValueError:
+        # Fallback to dateutil parsing which is more flexible
+        return parse(date_str, dayfirst=True, yearfirst=False)
 
-# Data loading and cleaning function
 @st.cache(allow_output_mutation=True)
 def load_data():
     url = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
@@ -16,11 +25,19 @@ def load_data():
     data = response.json()
     records = [rec['fields'] for rec in data['records']]
     df = pd.DataFrame(records)
+
+    # Convert 'date_de_publication' to datetime, assuming it's in ISO format.
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
-    df['date_de_fin_de_la_procedure_de_rappel'] = pd.to_datetime(df['date_de_fin_de_la_procedure_de_rappel'], errors='coerce')
-    df = df[df['date_de_publication'] >= '2021-04-01']  # Filtering out older dates
+
+    # Convert 'date_de_fin_de_la_procedure_de_rappel' using a safe parsing function for potentially non-standard French dates.
+    df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
+
+    # Filter the data to include only records from April 1, 2021, onward.
+    df = df[df['date_de_publication'] >= pd.Timestamp('2021-04-01')]
+
     return df
 
+# Load data
 df = load_data()
 
 # Sidebar for navigation
@@ -37,6 +54,25 @@ if not df.empty:
                                        value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
     filtered_data = filtered_data[(filtered_data['date_de_publication'] >= selected_dates[0]) & 
                                   (filtered_data['date_de_publication'] <= selected_dates[1])]
+    # Sub-category and risks filters
+if not df.empty and 'sous_categorie_de_produit' in df.columns and 'risques_encourus_par_le_consommateur' in df.columns:
+    selected_subcategories = st.sidebar.multiselect(
+        "Choose Sub-Categories",
+        options=df['sous_categorie_de_produit'].unique(),
+        default=df['sous_categorie_de_produit'].unique()
+    )
+    selected_risks = st.sidebar.multiselect(
+        "Choose Risks",
+        options=df['risques_encourus_par_le_consommateur'].unique(),
+        default=df['risques_encourus_par_le_consommateur'].unique()
+    )
+
+    # Filter the data further based on sub-category and risks selections
+    df = df[(df['sous_categorie_de_produit'].isin(selected_subcategories)) &
+            (df['risques_encourus_par_le_consommateur'].isin(selected_risks))]
+
+# Use 'df' for further processing or display in the main area of the app
+# st.write("Filtered Data", df)
 
 # Accueil page
 if page == "Accueil":
@@ -73,7 +109,7 @@ if page == "Accueil":
             for col, idx in zip(cols, range(i * num_columns, min((i + 1) * num_columns, len(recent_recalls)))):
                 if idx < len(recent_recalls):
                     row = recent_recalls.iloc[idx]
-                    col.image(row['liens_vers_les_images'], caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})", width=300)
+                    col.image(row['liens_vers_les_images'], caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})", width=150)
                     col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
