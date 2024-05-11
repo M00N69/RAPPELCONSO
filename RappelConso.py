@@ -3,16 +3,22 @@ import pandas as pd
 import plotly.express as px  # Make sure this line is added
 import requests
 from datetime import datetime
-import locale
+from dateutil.parser import parse
 
 # Setting the page to wide mode
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
-# Setting the locale to French to interpret days and months in French
-locale.setlocale(locale.LC_TIME, 'fr_FR')
-
 # Data loading and cleaning function
 @st.cache(allow_output_mutation=True)
+def safe_parse_date(date_str, fmt='%A %d %B %Y'):
+    """
+    Attempts to parse a date with a given format and falls back to dateutil's parser if the format fails.
+    """
+    try:
+        return pd.to_datetime(date_str, format=fmt, errors='coerce')
+    except ValueError:
+        return parse(date_str, dayfirst=True, yearfirst=False)
+
 def load_data():
     url = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
     response = requests.get(url)
@@ -20,19 +26,14 @@ def load_data():
     records = [rec['fields'] for rec in data['records']]
     df = pd.DataFrame(records)
 
-    # Assuming 'date_de_publication' is in standard ISO format; no change needed
+    # Convert 'date_de_publication' to datetime, assuming ISO format.
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
 
-    # Parse 'date_de_fin_de_la_procedure_de_rappel' assuming it's in the specific French format
-    df['date_de_fin_de_la_procedure_de_rappel'] = pd.to_datetime(
-        df['date_de_fin_de_la_procedure_de_rappel'],
-        format='%A %d %B %Y',  # French date format
-        errors='coerce',  # Handle any errors in conversion by returning NaT (Not a Time)
-        exact=False  # Allow format to match anywhere in the string
-    )
+    # Convert 'date_de_fin_de_la_procedure_de_rappel' using a safe parsing function for French dates.
+    df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(lambda x: safe_parse_date(x))
 
-    # Filter out entries before April 1st, 2021
-    df = df[df['date_de_publication'] >= '2021-04-01']
+    # Filter to include only records from April 1, 2021, onward.
+    df = df[df['date_de_publication'] >= pd.Timestamp('2021-04-01')]
 
     return df
 
