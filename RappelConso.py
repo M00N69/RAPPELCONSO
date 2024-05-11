@@ -18,20 +18,28 @@ def load_data():
 
 df = load_data()
 
-# Setup sidebar for navigation and filters
+# Now setup the sidebar
 st.sidebar.title("Navigation et Filtres")
-page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails"])
-selected_year = st.sidebar.selectbox('Sélectionner l\'année', options=sorted(df['date_de_publication'].dt.year.unique()))
+if not df.empty:
+    years = sorted(df['date_de_publication'].dt.year.unique())
+    selected_year = st.sidebar.selectbox('Sélectionner l\'année', options=years)
+    filtered_data = df[df['date_de_publication'].dt.year == selected_year]
 
-# Filter data by year
-filtered_data = df[df['date_de_publication'].dt.year == selected_year]
-min_date, max_date = filtered_data['date_de_publication'].min(), filtered_data['date_de_publication'].max()
-selected_dates = st.sidebar.slider("Sélectionner la plage de dates", 
-                                   min_value=min_date.to_pydatetime(), 
-                                   max_value=max_date.to_pydatetime(), 
-                                   value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
-filtered_data = filtered_data[(filtered_data['date_de_publication'] >= selected_dates[0]) & 
-                              (filtered_data['date_de_publication'] <= selected_dates[1])]
+    # Ensure there is data for the selected year before proceeding
+    if not filtered_data.empty:
+        min_date, max_date = filtered_data['date_de_publication'].min(), filtered_data['date_de_publication'].max()
+        selected_dates = st.sidebar.slider("Sélectionner la plage de dates",
+                                           min_value=min_date.to_pydatetime(), 
+                                           max_value=max_date.to_pydatetime(), 
+                                           value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
+        filtered_data = filtered_data[(filtered_data['date_de_publication'] >= selected_dates[0]) & 
+                                      (filtered_data['date_de_publication'] <= selected_dates[1])]
+    else:
+        st.sidebar.write("Aucune donnée disponible pour l'année sélectionnée.")
+else:
+    st.sidebar.write("Aucune donnée disponible.")
+
+page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails"])
 
 if page == "Accueil":
     st.title("Accueil - Dashboard des Rappels de Produits")
