@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import requests
-import plotly.express as px
 from datetime import datetime
 
 @st.cache(allow_output_mutation=True)
@@ -11,33 +10,44 @@ def load_data():
     data = response.json()
     records = [rec['fields'] for rec in data['records']]
     df = pd.DataFrame(records)
+    
+    # Ensure all dates are strings or null; this might help identify data issues
+    print("Sample date before conversion:", df['date_de_publication'].iloc[0])  # Debugging output
+
+    # Convert and handle non-convertible values
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
-    df['date_de_fin_de_la_procedure_de_rappel'] = pd.to_datetime(df['date_de_fin_de_la_procedure_de_rappel'], errors='coerce')
-    df = df[df['date_de_publication'] >= '2021-04-01']  # Filter out dates before April 2021
+
+    # Drop rows where dates could not be converted
+    df = df.dropna(subset=['date_de_publication'])
+
+    # Filter out dates before April 2021
+    df = df[df['date_de_publication'] >= '2021-04-01']
+
     return df
 
 df = load_data()
 
-# Now setup the sidebar
+# Sidebar for navigation
 st.sidebar.title("Navigation et Filtres")
 if not df.empty:
-    years = sorted(df['date_de_publication'].dt.year.unique())
-    selected_year = st.sidebar.selectbox('Sélectionner l\'année', options=years)
-    filtered_data = df[df['date_de_publication'].dt.year == selected_year]
+    try:
+        years = sorted(df['date_de_publication'].dt.year.unique())
+        selected_year = st.sidebar.selectbox('Sélectionner l\'année', options=years)
 
-    # Ensure there is data for the selected year before proceeding
-    if not filtered_data.empty:
-        min_date, max_date = filtered_data['date_de_publication'].min(), filtered_data['date_de_publication'].max()
-        selected_dates = st.sidebar.slider("Sélectionner la plage de dates",
-                                           min_value=min_date.to_pydatetime(), 
-                                           max_value=max_date.to_pydatetime(), 
-                                           value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
-        filtered_data = filtered_data[(filtered_data['date_de_publication'] >= selected_dates[0]) & 
-                                      (filtered_data['date_de_publication'] <= selected_dates[1])]
-    else:
-        st.sidebar.write("Aucune donnée disponible pour l'année sélectionnée.")
-else:
-    st.sidebar.write("Aucune donnée disponible.")
+        # Filter data by selected year
+        filtered_data = df[df['date_de_publication'].dt.year == selected_year]
+
+        # Setup date range slider
+        if not filtered_data.empty:
+            min_date, max_date = filtered_data['date_de_publication'].min(), filtered_data['date_de_publication'].max()
+            selected_dates = st.sidebar.slider("Sélectionner la plage de dates",
+                                               min_value=min_date.to_pydatetime(), 
+                                               max_value=max_date.to_pydatetime(), 
+                                               value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
+            filtered_data = filtered_data[(filtered_data['date_de_publication'] >= selected_dates[0]) & 
+                                          (filtered_data['date_de_publication'] <= selected_dates[1])]
+    except Exception as e:
+        st.sidebar.write("Error in processing date data:", e)
 
 page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails"])
 
