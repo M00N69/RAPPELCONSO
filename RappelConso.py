@@ -16,41 +16,43 @@ def load_data():
 
 df = load_data()
 
-# Sidebar for Year and Date Range Filter
 if not df.empty:
     df['year'] = df['date_de_publication'].dt.year
-    years = df['year'].unique()
-    selected_year = st.sidebar.selectbox('Select Year', options=sorted(years))
+    selected_year = st.sidebar.selectbox('Select Year', options=sorted(df['year'].unique()))
 
     filtered_data = df[df['year'] == selected_year]
     if not filtered_data.empty:
         min_date = filtered_data['date_de_publication'].min()
         max_date = filtered_data['date_de_publication'].max()
+        selected_dates = st.sidebar.slider(
+            "Select a date range:", 
+            min_value=min_date.to_pydatetime(), 
+            max_value=max_date.to_pydatetime(), 
+            value=(min_date.to_pydatetime(), max_date.to_pydatetime())
+        )
+        filtered_data = filtered_data[
+            (filtered_data['date_de_publication'] >= selected_dates[0]) & 
+            (filtered_data['date_de_publication'] <= selected_dates[1])
+        ]
 
-        if min_date and max_date:  # Ensure dates are not None
-            selected_dates = st.sidebar.slider(
-                "Select a date range:", 
-                min_value=min_date.to_pydatetime(), 
-                max_value=max_date.to_pydatetime(), 
-                value=(min_date.to_pydatetime(), max_date.to_pydatetime())
+        # Layout and styling adjustments for pie charts
+        col1, col2 = st.columns(2)
+        with col1:
+            risk_fig = px.pie(filtered_data, names='risques_encourus_par_le_consommateur', title='Risks Incurred by Consumers')
+            risk_fig.update_layout(
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                margin=dict(t=40, l=0, r=0, b=0)
             )
-            filtered_data = filtered_data[
-                (filtered_data['date_de_publication'] >= selected_dates[0]) & 
-                (filtered_data['date_de_publication'] <= selected_dates[1])
-            ]
+            st.plotly_chart(risk_fig, use_container_width=True)
+
+        with col2:
+            legal_fig = px.pie(filtered_data, names='nature_juridique_du_rappel', title='Legal Nature of Recall')
+            legal_fig.update_layout(
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                margin=dict(t=40, l=0, r=0, b=0)
+            )
+            st.plotly_chart(legal_fig, use_container_width=True)
     else:
-        st.sidebar.write("No data available for the selected year.")
+        st.write("No data available for the selected year and date range.")
 else:
-    st.sidebar.write("No data available.")
-
-# Main Page Content
-st.title('Visualisation des Rappels de Produits')
-
-# Displaying pie charts and data
-if not filtered_data.empty:
-    risk_fig = px.pie(filtered_data, names='risques_encourus_par_le_consommateur', title='Risks Incurred by Consumers')
-    st.plotly_chart(risk_fig, use_container_width=True)
-    legal_fig = px.pie(filtered_data, names='nature_juridique_du_rappel', title='Legal Nature of Recall')
-    st.plotly_chart(legal_fig, use_container_width=True)
-else:
-    st.write("Adjust the filters to view data.")
+    st.write("No data available.")
