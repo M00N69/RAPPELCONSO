@@ -2,5 +2,5 @@ streamlit
 pandas
 plotly
 requests
-datetime
-
+python-dateutil
+google-generativeai
