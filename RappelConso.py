@@ -28,7 +28,7 @@ system_instruction = """You are a helpful and informative chatbot that answers q
 Focus on providing information about recall dates, products, brands, risks, and categories. 
 Avoid making subjective statements or offering opinions. Base your responses strictly on the data provided."""
 
-# Create the Gemini Pro Model instance
+# Create the Gemini Pro Model definition 
 model = genai.GenerativeModel(
     model_name="gemini-1.5-pro-latest",
     generation_config=generation_config,
@@ -184,8 +184,8 @@ def get_llm_response(prompt, data, model=model):
     context = f"The following is information about food product recalls in France from the RappelConso database: {data.to_string()}\n\n"
     full_prompt = context + prompt
 
-    # Use model.generate() 
-    response = model.generate(prompt=full_prompt)  
+    with model.start() as instance: 
+        response = instance.generate(prompt=full_prompt)
 
     return response.text  # Access the generated text
 
