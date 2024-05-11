@@ -68,27 +68,40 @@ elif page == "Visualisation":
     st.title("Visualisation des Rappels de Produits")
     st.write("Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs.")
 
+    # Ensure data is available
     if not filtered_data.empty:
-        # Adjusting column widths for layout optimization
-        col1, col2 = st.columns([2, 1])  # Adjust the ratio as needed for visual balance
+        # Filter data for significant categories
+        value_counts = filtered_data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
+        significant_categories = value_counts[value_counts >= 2]
+        filtered_categories_data = filtered_data[filtered_data['sous_categorie_de_produit'].isin(significant_categories.index)]
 
-        with col1:
-            # Pie Chart for Product Sub-Categories
-            fig_products = px.pie(filtered_categories_data, names='sous_categorie_de_produit',
-                                  title='Produits',
-                                  color_discrete_sequence=px.colors.sequential.RdBu,
-                                  width=800,  # Specify width
-                                  height=600)  # Specify height
-            st.plotly_chart(fig_products, use_container_width=False)  # Set to False to use Plotly's sizing
+        # Check if filtered_categories_data is not empty
+        if not filtered_categories_data.empty:
+            col1, col2 = st.columns([2, 1])  # Adjust the ratio as needed for visual balance
+
+            with col1:
+                # Pie Chart for Product Sub-Categories
+                fig_products = px.pie(filtered_categories_data, names='sous_categorie_de_produit',
+                                      title='Produits',
+                                      color_discrete_sequence=px.colors.sequential.RdBu,
+                                      width=800,  # Specify width
+                                      height=600)  # Specify height
+                st.plotly_chart(fig_products, use_container_width=False)
             
-        with col2:
-            # Pie Chart for Legal Nature of Recalls
-            fig_legal = px.pie(filtered_legal_data, names='nature_juridique_du_rappel',
-                               title='Nature juridique des rappels',
-                               color_discrete_sequence=px.colors.sequential.RdBu,
-                               width=400,  # Specify width
-                               height=300)  # Specify height
-            st.plotly_chart(fig_legal, use_container_width=False)  # Set to False to use Plotly's sizing
+            # Assume filtered_legal_data is also properly defined as above for filtered_categories_data
+            with col2:
+                fig_legal = px.pie(filtered_legal_data, names='nature_juridique_du_rappel',
+                                   title='Nature juridique des rappels',
+                                   color_discrete_sequence=px.colors.sequential.RdBu,
+                                   width=400,  # Specify width
+                                   height=300)  # Specify height
+                st.plotly_chart(fig_legal, use_container_width=False)
+
+        else:
+            st.error("No significant product categories found. Adjust your filters or data processing.")
+
+    else:
+        st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
 
         # Bar Chart for Monthly Recalls
         filtered_data['month'] = filtered_data['date_de_publication'].dt.strftime('%Y-%m')
