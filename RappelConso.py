@@ -92,6 +92,14 @@ elif page == "Visualisation":
                                title='Nature juridique des rappels',
                                color_discrete_sequence=px.colors.sequential.RdBu)
             st.plotly_chart(fig_legal, use_container_width=True)
+
+     # Monthly Recalls Bar Chart
+        filtered_data['month'] = filtered_data['date_de_publication'].dt.strftime('%Y-%m')
+        recalls_per_month = filtered_data.groupby('month').size().reset_index(name='count')
+        fig_monthly_recalls = px.bar(recalls_per_month, x='month', y='count',
+                                     labels={'month': 'Mois', 'count': 'Nombre de rappels'},
+                                     title='Nombre de rappels par mois')
+        st.plotly_chart(fig_monthly_recalls, use_container_width=True)
     else:
         st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
 
