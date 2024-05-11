@@ -61,7 +61,7 @@ if page == "Accueil":
     # Alternative for displaying images if direct embedding is problematic
     st.write("Cliquez sur les liens pour voir les images des produits rappelés:")
     for index, row in df.iterrows():
-    st.markdown(f"[![Produit]({row['liens_vers_les_images']})]({row['liens_vers_les_images']})", unsafe_allow_html=True)
+        st.markdown(f"[![Produit]({row['liens_vers_les_images']})]({row['liens_vers_les_images']})", unsafe_allow_html=True)
         
 elif page == "Visualisation":
     st.title("Visualisation des Rappels de Produits")
