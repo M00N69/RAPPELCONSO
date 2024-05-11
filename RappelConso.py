@@ -58,10 +58,11 @@ if page == "Accueil":
     df['lien_vers_affichette_pdf'] = df['lien_vers_affichette_pdf'].apply(lambda x: f"[📄]({x})")
     st.dataframe(df[['liens_vers_les_images', 'date_de_publication', 'noms_des_modeles_ou_references', 'nom_de_la_marque_du_produit', 'lien_vers_affichette_pdf']])
 
-# Alternative for displaying images if direct embedding is problematic
-st.write("Cliquez sur les liens pour voir les images des produits rappelés:")
-for index, row in df.iterrows():
+    # Alternative for displaying images if direct embedding is problematic
+    st.write("Cliquez sur les liens pour voir les images des produits rappelés:")
+    for index, row in df.iterrows():
     st.markdown(f"[![Produit]({row['liens_vers_les_images']})]({row['liens_vers_les_images']})", unsafe_allow_html=True)
+        
 elif page == "Visualisation":
     st.title("Visualisation des Rappels de Produits")
     risques_pie = px.pie(filtered_data, names='risques_encourus_par_le_consommateur', title='Risques encourus par les consommateurs')
