@@ -59,3 +59,49 @@ if page == "Accueil":
             st.markdown(f"[Document]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
 
 # Additional pages can be set up similarly
+elif page == "Visualisation":
+    st.title("Visualisation des Rappels de Produits")
+    st.write("Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs.")
+
+    if not filtered_data.empty:
+        # Pie Chart for Risks Incurred by Consumers
+        fig_risks = px.pie(filtered_data, names='risques_encourus_par_le_consommateur',
+                           title='Risques encourus par les consommateurs',
+                           color_discrete_sequence=px.colors.sequential.RdBu)
+        st.plotly_chart(fig_risks, use_container_width=True)
+
+        # Pie Chart for Legal Nature of Recalls
+        fig_legal = px.pie(filtered_data, names='nature_juridique_du_rappel',
+                           title='Nature juridique des rappels',
+                           color_discrete_sequence=px.colors.sequential.RdBu)
+        st.plotly_chart(fig_legal, use_container_width=True)
+
+        # Bar Chart for Recalls Over Time
+        filtered_data['month_year'] = filtered_data['date_de_publication'].dt.to_period('M').astype(str)
+        recall_counts = filtered_data.groupby('month_year').size().reset_index(name='counts')
+        fig_timeline = px.bar(recall_counts, x='month_year', y='counts',
+                              labels={'counts': 'Nombre de rappels', 'month_year': 'Mois'},
+                              title='Nombre de rappels par mois')
+        st.plotly_chart(fig_timeline, use_container_width=True)
+    else:
+        st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
+
+elif page == "Détails":
+    st.title("Détails des Rappels de Produits")
+    st.write("Consultez ici un tableau détaillé des rappels de produits, incluant toutes les informations disponibles.")
+
+    if not filtered_data.empty:
+        # Displaying the full DataFrame
+        st.dataframe(filtered_data)
+
+        # Download button for the filtered dataset
+        csv = filtered_data.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Télécharger les données filtrées",
+            data=csv,
+            file_name='details_rappels.csv',
+            mime='text/csv'
+        )
+    else:
+        st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
+
