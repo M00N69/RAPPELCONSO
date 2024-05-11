@@ -54,6 +54,25 @@ if not df.empty:
                                        value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
     filtered_data = filtered_data[(filtered_data['date_de_publication'] >= selected_dates[0]) & 
                                   (filtered_data['date_de_publication'] <= selected_dates[1])]
+    # Sub-category and risks filters
+if not df.empty and 'sous_categorie_de_produit' in df.columns and 'risques_encourus_par_le_consommateur' in df.columns:
+    selected_subcategories = st.sidebar.multiselect(
+        "Choose Sub-Categories",
+        options=df['sous_categorie_de_produit'].unique(),
+        default=df['sous_categorie_de_produit'].unique()
+    )
+    selected_risks = st.sidebar.multiselect(
+        "Choose Risks",
+        options=df['risques_encourus_par_le_consommateur'].unique(),
+        default=df['risques_encourus_par_le_consommateur'].unique()
+    )
+
+    # Filter the data further based on sub-category and risks selections
+    df = df[(df['sous_categorie_de_produit'].isin(selected_subcategories)) &
+            (df['risques_encourus_par_le_consommateur'].isin(selected_risks))]
+
+# Use 'df' for further processing or display in the main area of the app
+st.write("Filtered Data", df)
 
 # Accueil page
 if page == "Accueil":
