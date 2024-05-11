@@ -72,7 +72,7 @@ if not df.empty and 'sous_categorie_de_produit' in df.columns and 'risques_encou
             (df['risques_encourus_par_le_consommateur'].isin(selected_risks))]
 
 # Use 'df' for further processing or display in the main area of the app
-st.write("Filtered Data", df)
+# st.write("Filtered Data", df)
 
 # Accueil page
 if page == "Accueil":
