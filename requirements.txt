@@ -3,4 +3,4 @@ pandas
 plotly
 requests
 datetime
-locale
+
