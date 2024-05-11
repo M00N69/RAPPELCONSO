@@ -110,7 +110,7 @@ elif page == "Visualisation":
                                      labels={'month': 'Mois', 'count': 'Nombre de rappels'},
                                      title='Nombre de rappels par mois')
         st.plotly_chart(fig_monthly_recalls, use_container_width=True)
-    else:
+else:
         st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
 
 elif page == "Détails":
