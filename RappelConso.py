@@ -4,6 +4,7 @@ import requests
 import plotly.express as px
 from datetime import datetime
 
+# Function to load data
 @st.cache(allow_output_mutation=True)
 def load_data():
     url = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=&rows=10000"
@@ -11,48 +12,60 @@ def load_data():
     data = response.json()
     records = [rec['fields'] for rec in data['records']]
     df = pd.DataFrame(records)
-    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'])
+    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
+    df['date_de_fin_de_la_procedure_de_rappel'] = pd.to_datetime(df['date_de_fin_de_la_procedure_de_rappel'], errors='coerce')
     return df
 
 df = load_data()
 
-if not df.empty:
-    df['year'] = df['date_de_publication'].dt.year
-    selected_year = st.sidebar.selectbox('Select Year', options=sorted(df['year'].unique()))
+# Sidebar for navigation and filters
+st.sidebar.title("Navigation et Filtres")
+page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails"])
+selected_year = st.sidebar.selectbox('Sélectionner l\'année', options=sorted(df['date_de_publication'].dt.year.unique()))
 
-    filtered_data = df[df['year'] == selected_year]
-    if not filtered_data.empty:
-        min_date = filtered_data['date_de_publication'].min()
-        max_date = filtered_data['date_de_publication'].max()
-        selected_dates = st.sidebar.slider(
-            "Select a date range:", 
-            min_value=min_date.to_pydatetime(), 
-            max_value=max_date.to_pydatetime(), 
-            value=(min_date.to_pydatetime(), max_date.to_pydatetime())
-        )
-        filtered_data = filtered_data[
-            (filtered_data['date_de_publication'] >= selected_dates[0]) & 
-            (filtered_data['date_de_publication'] <= selected_dates[1])
-        ]
+# Filtering by year
+df = df[df['date_de_publication'].dt.year == selected_year]
+min_date, max_date = df['date_de_publication'].min(), df['date_de_publication'].max()
+selected_dates = st.sidebar.slider("Sélectionner la plage de dates", min_value=min_date, max_value=max_date, value=(min_date, max_date))
+df = df[(df['date_de_publication'] >= selected_dates[0]) & (df['date_de_publication'] <= selected_dates[1])]
 
-        # Layout and styling adjustments for pie charts
-        col1, col2 = st.columns(2)
-        with col1:
-            risk_fig = px.pie(filtered_data, names='risques_encourus_par_le_consommateur', title='Risks Incurred by Consumers')
-            risk_fig.update_layout(
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                margin=dict(t=40, l=0, r=0, b=0)
-            )
-            st.plotly_chart(risk_fig, use_container_width=True)
+# Filter by sous_categorie_de_produit and risques_encourus_par_le_consommateur
+selected_subcategories = st.sidebar.multiselect("Sous-catégorie de produit", options=df['sous_categorie_de_produit'].unique())
+selected_risks = st.sidebar.multiselect("Risques encourus par le consommateur", options=df['risques_encourus_par_le_consommateur'].unique())
+if selected_subcategories:
+    df = df[df['sous_categorie_de_produit'].isin(selected_subcategories)]
+if selected_risks:
+    df = df[df['risques_encourus_par_le_consommateur'].isin(selected_risks)]
 
-        with col2:
-            legal_fig = px.pie(filtered_data, names='nature_juridique_du_rappel', title='Legal Nature of Recall')
-            legal_fig.update_layout(
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                margin=dict(t=40, l=0, r=0, b=0)
-            )
-            st.plotly_chart(legal_fig, use_container_width=True)
-    else:
-        st.write("No data available for the selected year and date range.")
-else:
-    st.write("No data available.")
+if page == "Accueil":
+    st.title("Accueil")
+    st.write("Bienvenue sur le tableau de bord des rappels de produits. Ce tableau ne comprend que les produits de la catégorie 'Alimentation'.")
+    active_recalls = df[df['date_de_fin_de_la_procedure_de_rappel'] >= datetime.now()]
+    st.metric("Nombre de rappels dans la période sélectionnée", len(df))
+    st.metric("Rappels actifs", len(active_recalls))
+    recent_recalls = df.nlargest(10, 'date_de_publication')[['liens_vers_les_images', 'date_de_publication', 'noms_des_modeles_ou_references', 'nom_de_la_marque_du_produit', 'lien_vers_affichette_pdf']]
+    st.dataframe(recent_recalls)
+
+elif page == "Visualisation":
+    st.title("Visualisation des Rappels de Produits")
+    col1, col2 = st.columns(2)
+    with col1:
+        pie_risks = px.pie(df, names='risques_encourus_par_le_consommateur', title='Risques encourus')
+        st.plotly_chart(pie_risks)
+    with col2:
+        pie_legal = px.pie(df, names='nature_juridique_du_rappel', title='Nature juridique du rappel')
+        st.plotly_chart(pie_legal)
+    # Bar chart of recalls per month
+    df['month'] = df['date_de_publication'].dt.strftime('%Y-%m')
+    recall_counts = df.groupby('month').size()
+    active_counts = active_recalls.groupby('month').size()
+    bar_chart = px.bar(recall_counts, title="Nombre de rappels par mois")
+    bar_chart.add_scatter(x=active_counts.index, y=active_counts, mode='lines', name='Rappels actifs')
+    st.plotly_chart(bar_chart)
+
+elif page == "Détails":
+    st.title("Détails des Rappels de Produits")
+    st.dataframe(df)
+    st.download_button("Télécharger les données", df.to_csv().encode('utf-8'), file_name='details_rappels.csv', mime='text/csv')
+
+# Ensure all visualizations and UI elements handle empty data gracefully
