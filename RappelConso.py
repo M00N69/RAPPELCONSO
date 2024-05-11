@@ -4,18 +4,16 @@ import plotly.express as px
 import requests
 from datetime import datetime
 from dateutil.parser import parse
-from google.generativeai import Palm  # For using Gemini Pro
 
-# Constants
+# --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
 START_DATE = pd.Timestamp('2021-04-01')
 DATE_FORMAT = '%A %d %B %Y'
 
-# --- Google Gemini Pro Setup ---
-# **Important:** 
-# 1. Replace 'YOUR_API_KEY' with your actual API key from Google.
-# 2. Ensure you have the `google-generativeai` package installed: `pip install google-generativeai`
-Palm.configure(api_key='AIzaSyCJlVZU5g79CLjE7Lug8pInbXOw6c0DAJg')
+# --- Gemini Pro API Settings ---
+# Replace with your actual API key and model ID:
+GEMINI_API_KEY = "AIzaSyCJlVZU5g79CLjE7Lug8pInbXOw6c0DAJg" 
+GEMINI_MODEL_ID = "gemini-pro" 
 
 
 # --- Helper Functions ---
@@ -127,20 +125,33 @@ def display_visualizations(data):
     else:
         st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
 
-def get_llm_response(prompt, data):
-    """
-    Gets a response from Gemini Pro, incorporating the provided data. 
-    """
+def get_gemini_response(prompt, api_key, model_id):
+    """Gets a response from Gemini Pro using the REST API."""
+    url = f"https://api.generativeai.google.com/v1/models/{model_id}:generateText"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "prompt": {
+            "text": prompt
+        },
+        "temperature": 0.7,  # Adjust as needed
+        "max_output_tokens": 256  # Adjust as needed
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code == 200:
+        return response.json()["candidates"][0]["output"]
+    else:
+        raise Exception(f"Gemini API request failed with status {response.status_code}: {response.text}")
+
+def get_llm_response(prompt, data, api_key=GEMINI_API_KEY, model_id=GEMINI_MODEL_ID):
+    """Gets a response from Gemini Pro, incorporating the provided data."""
     context = f"Voici des informations sur les rappels de produits alimentaires en France: {data.to_string()}\n\n"
     full_prompt = context + prompt
-
-    response = Palm.generate_text(
-        model='models/chat-bison-001', 
-        prompt=full_prompt,
-        temperature=0.7, # Adjust for creativity
-        max_output_tokens=256 # Adjust output length 
-    )
-    return response.result
+    response = get_gemini_response(full_prompt, api_key, model_id)
+    return response
 
 # --- Main App ---
 
