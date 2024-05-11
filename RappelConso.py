@@ -16,24 +16,17 @@ api_key = st.secrets["api_key"]
 genai.configure(api_key=api_key)
 
 # --- Gemini Configuration ---
-generation_config = {
-    "temperature": 0.7,  # Adjust for creativity
-    "top_p": 0.4,
-    "top_k": 32,
-    "max_output_tokens": 256,  # Adjust for response length
-}
+generation_config = genai.GenerationConfig(
+    temperature=0.7,  # Adjust for creativity
+    top_p=0.4,
+    top_k=32,
+    max_output_tokens=256,  # Adjust for response length
+)
 
 # Updated System Instruction
 system_instruction = """You are a helpful and informative chatbot that answers questions about food product recalls in France, using the RappelConso database. 
 Focus on providing information about recall dates, products, brands, risks, and categories. 
 Avoid making subjective statements or offering opinions. Base your responses strictly on the data provided."""
-
-# Create the Gemini Pro Model definition 
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-pro-latest",
-    generation_config=generation_config,
-    system_instruction=system_instruction,
-)
 
 # --- Helper Functions ---
 
@@ -179,18 +172,19 @@ def display_visualizations(data):
             "Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés."
         )
 
-def get_llm_response(prompt, data, model=model):
+def get_llm_response(prompt, data):
     """Gets a response from Gemini Pro, incorporating the provided data."""
     context = f"The following is information about food product recalls in France from the RappelConso database: {data.to_string()}\n\n"
     full_prompt = context + prompt
 
-    # Create a Content object for the prompt
-    content = genai.Content(
-        parts=[genai.Part(text=full_prompt)] 
+    response = genai.generate_text(
+        model="gemini-1.5-pro-latest",
+        prompt=full_prompt,
+        generation_config=generation_config,
+        system_instruction=system_instruction
     )
+    return response.result
 
-    response = model.generate_content(content=content) # Pass the Content object
-    return response.candidates[0].text
 
 # --- Main App ---
 
