@@ -21,7 +21,16 @@ generation_config = genai.GenerationConfig(
     max_output_tokens=256  # Adjust the maximum response length
 )
 
-safety_settings = genai.SafetySettings()
+# Corrected Safety Settings
+safety_settings = genai.SafetySettings(
+    harmful_categories=[
+        genai.HarmCategory.HATE_SPEECH,
+        genai.HarmCategory.SEXUALLY_EXPLICIT,
+        genai.HarmCategory.VIOLENCE
+    ],
+    harm_block_threshold=0.8,  # Adjust threshold as needed
+    bias_block_threshold=0.8  # Adjust threshold as needed
+)
 
 system_instruction = """
 You are a helpful and informative chatbot that answers questions about food product recalls in France.
