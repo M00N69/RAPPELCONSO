@@ -65,25 +65,29 @@ elif page == "Visualisation":
     st.write("Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs.")
 
     if not filtered_data.empty:
-        # Pie Chart for Risks Incurred by Consumers
-        fig_risks = px.pie(filtered_data, names='sous_categorie_de_produit',
-                           title='Produits',
-                           color_discrete_sequence=px.colors.sequential.RdBu)
-        st.plotly_chart(fig_risks, use_container_width=True)
+        # Preprocess data to include only significant proportions for product sub-categories
+        value_counts = filtered_data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
+        significant_categories = value_counts[value_counts >= 2]
+        filtered_categories_data = filtered_data[filtered_data['sous_categorie_de_produit'].isin(significant_categories.index)]
+        
+        value_counts_legal = filtered_data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
+        significant_legal = value_counts_legal[value_counts_legal >= 2]
+        filtered_legal_data = filtered_data[filtered_data['nature_juridique_du_rappel'].isin(significant_legal.index)]
 
-        # Pie Chart for Legal Nature of Recalls
-        fig_legal = px.pie(filtered_data, names='nature_juridique_du_rappel',
-                           title='Nature juridique des rappels',
-                           color_discrete_sequence=px.colors.sequential.RdBu)
-        st.plotly_chart(fig_legal, use_container_width=True)
-
-        # Bar Chart for Recalls Over Time
-        filtered_data['month_year'] = filtered_data['date_de_publication'].dt.to_period('M').astype(str)
-        recall_counts = filtered_data.groupby('month_year').size().reset_index(name='counts')
-        fig_timeline = px.bar(recall_counts, x='month_year', y='counts',
-                              labels={'counts': 'Nombre de rappels', 'month_year': 'Mois'},
-                              title='Nombre de rappels par mois')
-        st.plotly_chart(fig_timeline, use_container_width=True)
+        # Layout for side-by-side pie charts
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig_products = px.pie(filtered_categories_data, names='sous_categorie_de_produit',
+                                  title='Produits',
+                                  color_discrete_sequence=px.colors.sequential.RdBu)
+            st.plotly_chart(fig_products, use_container_width=True)
+        
+        with col2:
+            fig_legal = px.pie(filtered_legal_data, names='nature_juridique_du_rappel',
+                               title='Nature juridique des rappels',
+                               color_discrete_sequence=px.colors.sequential.RdBu)
+            st.plotly_chart(fig_legal, use_container_width=True)
     else:
         st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
 
