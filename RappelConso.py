@@ -19,6 +19,7 @@ RELEVANT_COLUMNS = [
 
 # --- Gemini Pro API Settings from Streamlit Secrets ---
 api_key = st.secrets["api_key"]
+genai.configure(api_key=api_key)
 
 # --- Gemini Configuration ---
 generation_config = genai.GenerationConfig(
@@ -28,8 +29,7 @@ generation_config = genai.GenerationConfig(
     max_output_tokens=256,  # Adjust for response length
 )
 
-
-# System Instruction (defined globally)
+# System Instruction
 system_instruction = """You are a helpful and informative chatbot that answers questions about food product recalls in France, using the RappelConso database. 
 Focus on providing information about recall dates, products, brands, risks, and categories. 
 Avoid making subjective statements or offering opinions. Base your responses strictly on the data provided."""
@@ -93,7 +93,6 @@ def display_recent_recalls(data, num_columns=5):
                     col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
-
 
 def display_visualizations(data):
     """Creates and displays the visualizations."""
@@ -165,14 +164,20 @@ def get_llm_response(user_question, data):
     # 5. Combine context and user question into the full prompt
     full_prompt = context + user_question
 
-   # 6. Generate response using genai.generate_text (pass generation_config here)
-    response = genai.generate_text(
-        model="gemini-1.5-pro-latest",
-        prompt=full_prompt,
-        generation_config=generation_config,  # Pass generation config here
-        system_instruction=system_instruction
+    # 6. Create a GenerativeModel instance 
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-pro-latest",
+        system_instruction=system_instruction  # System instruction passed here
     )
-    return response.result
+
+    # 7. Generate text
+    response = model.generate_text(
+        prompt=full_prompt,
+        generation_config=generation_config
+    )
+
+    # 8. Access the text from the first candidate
+    return response.candidates[0].text
 
 # --- Main App ---
 
