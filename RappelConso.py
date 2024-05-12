@@ -15,11 +15,10 @@ RELEVANT_COLUMNS = [
     'nom_de_la_marque_du_produit',
     'risques_encourus_par_le_consommateur',
     'sous_categorie_de_produit'
-]  # Columns to potentially include in the context
+]  # Columns potentially relevant for chatbot context
 
 # --- Gemini Pro API Settings from Streamlit Secrets ---
 api_key = st.secrets["api_key"]
-genai.configure(api_key=api_key)
 
 # --- Gemini Configuration ---
 generation_config = genai.GenerationConfig(
@@ -28,6 +27,9 @@ generation_config = genai.GenerationConfig(
     top_k=32,
     max_output_tokens=256,  # Adjust for response length
 )
+
+# Configure API key and generation config
+genai.configure(api_key=api_key, generation_config=generation_config)
 
 # System Instruction (defined globally)
 system_instruction = """You are a helpful and informative chatbot that answers questions about food product recalls in France, using the RappelConso database. 
@@ -142,7 +144,7 @@ def display_visualizations(data):
 def get_llm_response(user_question, data):
     """Gets a response from Gemini Pro, incorporating relevant data."""
 
-    # 1. Keyword Matching (You can improve this)
+    # 1. Keyword Matching (This is very basic, you can improve it)
     keywords = user_question.lower().split()
 
     # 2. Select relevant rows based on keyword matching
@@ -159,21 +161,19 @@ def get_llm_response(user_question, data):
     context = "Relevant information from the RappelConso database:\n"
     for index, row in selected_rows.iterrows():
         for col in RELEVANT_COLUMNS:
-            context += f"- {col}: {row[col]}\n"
+            context += f"- {col}: {str(row[col])}\n"  # Explicit string conversion
     context += "\n"
 
     # 5. Combine context and user question into the full prompt
-    full_prompt = str(context) + str(user_question)  # Explicitly convert to strings
+    full_prompt = context + user_question
 
-    # 6. Generate response using genai.generate_text
+    # 6. Generate response using genai.generate_text (generation_config is no longer an argument here)
     response = genai.generate_text(
         model="gemini-1.5-pro-latest",
-        prompt=full_prompt,  # Make sure full_prompt is a string
-        generation_config=generation_config,
-        system_instruction=system_instruction  # System instruction passed here
+        prompt=full_prompt,
+        system_instruction=system_instruction
     )
     return response.result
-
 
 # --- Main App ---
 
@@ -214,39 +214,29 @@ filtered_data = filter_data(df, selected_year, selected_dates, selected_subcateg
 
 if page == "Accueil":
     st.title("Accueil - Dashboard des Rappels de Produits")
-    st.write(
-        "Ce tableau de bord présente uniquement les produits de la catégorie 'Alimentation'."
-    )
+    st.write("Ce tableau de bord présente uniquement les produits de la catégorie 'Alimentation'.")
 
     display_metrics(filtered_data)
     display_recent_recalls(filtered_data)
 
 elif page == "Visualisation":
     st.title("Visualisation des Rappels de Produits")
-    st.write(
-        "Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs."
-    )
+    st.write("Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs.")
     display_visualizations(filtered_data)
 
 elif page == "Détails":
     st.title("Détails des Rappels de Produits")
-    st.write(
-        "Consultez ici un tableau détaillé des rappels de produits, incluant toutes les informations disponibles."
-    )
+    st.write("Consultez ici un tableau détaillé des rappels de produits, incluant toutes les informations disponibles.")
 
     if not filtered_data.empty:
         st.dataframe(filtered_data)
         csv = filtered_data.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Télécharger les données filtrées",
-            data=csv,
-            file_name='details_rappels.csv',
-            mime='text/csv',
-        )
+        st.download_button(label="Télécharger les données filtrées",
+                           data=csv,
+                           file_name='details_rappels.csv',
+                           mime='text/csv')
     else:
-        st.error(
-            "Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année."
-        )
+        st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
 
 elif page == "Chatbot":
     st.title("Posez vos questions sur les rappels de produits")
