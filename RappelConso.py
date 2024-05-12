@@ -28,8 +28,6 @@ generation_config = genai.GenerationConfig(
     max_output_tokens=256,  # Adjust for response length
 )
 
-# Configure API key and generation config
-genai.configure(api_key=api_key, generation_config=generation_config)
 
 # System Instruction (defined globally)
 system_instruction = """You are a helpful and informative chatbot that answers questions about food product recalls in France, using the RappelConso database. 
