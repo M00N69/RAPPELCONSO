@@ -163,7 +163,7 @@ def get_llm_response(user_question, data):
     context += "\n"
 
     # 5. Combine context and user question into the full prompt
-    full_prompt = context + user_question
+    full_prompt = str(context) + str(user_question)  # Explicitly convert to strings
 
     # 6. Generate response using genai.generate_text
     response = genai.generate_text(
