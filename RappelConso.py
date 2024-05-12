@@ -17,16 +17,16 @@ RELEVANT_COLUMNS = [
     'sous_categorie_de_produit'
 ]  # Columns potentially relevant for chatbot context
 
-# --- Gemini Pro API Settings from Streamlit Secrets ---
+# --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
 genai.configure(api_key=api_key)
 
 # --- Gemini Configuration ---
 generation_config = genai.GenerationConfig(
-    temperature=0.7,  # Adjust for creativity
+    temperature=0.7,
     top_p=0.4,
     top_k=32,
-    max_output_tokens=256,  # Adjust for response length
+    max_output_tokens=256,
 )
 
 # System Instruction
@@ -94,6 +94,7 @@ def display_recent_recalls(data, num_columns=5):
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
+
 def display_visualizations(data):
     """Creates and displays the visualizations."""
     if not data.empty:
@@ -138,118 +139,120 @@ def display_visualizations(data):
     else:
         st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
 
-def get_llm_response(user_question, data):
-    """Gets a response from Gemini Pro, incorporating relevant data."""
-
-    # 1. Keyword Matching (This is very basic, you can improve it)
+def get_relevant_data_as_text(user_question, data):
+    """Extracts and formats relevant data from the DataFrame as text."""
     keywords = user_question.lower().split()
-
-    # 2. Select relevant rows based on keyword matching
     selected_rows = data[data[RELEVANT_COLUMNS].apply(
         lambda row: any(keyword in str(val).lower() for keyword in keywords for val in row),
         axis=1
-    )]
+    )].head(3) # Limit to 3 rows
 
-    # 3. Limit the number of rows included
-    max_rows = 3  # Reduced for brevity
-    selected_rows = selected_rows.head(max_rows)
-
-    # 4. Construct the context with relevant information
     context = "Relevant information from the RappelConso database:\n"
     for index, row in selected_rows.iterrows():
         for col in RELEVANT_COLUMNS:
-            context += f"- {col}: {str(row[col])}\n"  # Explicit string conversion
+            context += f"- {col}: {str(row[col])}\n" 
     context += "\n"
+    return context
 
-    # 5. Combine context and user question into the full prompt
-    full_prompt = context + user_question
-
-    # 6. Create a GenerativeModel instance 
-    model = genai.GenerativeModel(
+def configure_model():
+    """Creates and configures a GenerativeModel instance."""
+    return genai.GenerativeModel(
         model_name="gemini-1.5-pro-latest",
-        system_instruction=system_instruction  # System instruction passed here
+        system_instruction=system_instruction,
     )
 
-    # 7. Generate text
-    response = model.generate_text(
-        prompt=full_prompt,
-        generation_config=generation_config
-    )
 
-    # 8. Access the text from the first candidate
-    return response.candidates[0].text
+def main():
+    st.title("RappelConso - Chatbot & Dashboard")
 
-# --- Main App ---
+    # Load data
+    df = load_data()
 
-# Page configuration
-st.set_page_config(layout="wide", initial_sidebar_state="expanded")
+    # --- Sidebar ---
+    st.sidebar.title("Navigation et Filtres")
+    page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails", "Chatbot"])
 
-# Load data
-df = load_data()
+    # Year filter
+    selected_year = st.sidebar.selectbox('Sélectionner l\'année', options=sorted(df['date_de_publication'].dt.year.unique()))
 
-# --- Sidebar ---
-st.sidebar.title("Navigation et Filtres")
-page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails", "Chatbot"])
+    # Date range slider
+    filtered_data = df[df['date_de_publication'].dt.year == selected_year]
+    min_date, max_date = filtered_data['date_de_publication'].min(), filtered_data['date_de_publication'].max()
+    selected_dates = st.sidebar.slider("Sélectionner la plage de dates",
+                                       min_value=min_date.to_pydatetime(),
+                                       max_value=max_date.to_pydatetime(),
+                                       value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
 
-# Year filter
-selected_year = st.sidebar.selectbox('Sélectionner l\'année', options=sorted(df['date_de_publication'].dt.year.unique()))
+    # Sub-category and risks filters
+    selected_subcategories = st.sidebar.multiselect("Sous-catégories",
+                                                   options=df['sous_categorie_de_produit'].unique(),
+                                                   default=df['sous_categorie_de_produit'].unique())
+    selected_risks = st.sidebar.multiselect("Risques",
+                                             options=df['risques_encourus_par_le_consommateur'].unique(),
+                                             default=df['risques_encourus_par_le_consommateur'].unique())
 
-# Date range slider
-filtered_data = df[df['date_de_publication'].dt.year == selected_year]
-min_date, max_date = filtered_data['date_de_publication'].min(), filtered_data['date_de_publication'].max()
-selected_dates = st.sidebar.slider("Sélectionner la plage de dates",
-                                   min_value=min_date.to_pydatetime(),
-                                   max_value=max_date.to_pydatetime(),
-                                   value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
+    # --- Search Bar ---
+    search_term = st.text_input("Rechercher (Nom du produit, marque, etc.)", "")
 
-# Sub-category and risks filters
-selected_subcategories = st.sidebar.multiselect("Sous-catégories",
-                                               options=df['sous_categorie_de_produit'].unique(),
-                                               default=df['sous_categorie_de_produit'].unique())
-selected_risks = st.sidebar.multiselect("Risques",
-                                         options=df['risques_encourus_par_le_consommateur'].unique(),
-                                         default=df['risques_encourus_par_le_consommateur'].unique())
+    # --- Page Content ---
+    filtered_data = filter_data(df, selected_year, selected_dates, selected_subcategories, selected_risks, search_term)
 
-# --- Search Bar ---
-search_term = st.text_input("Rechercher (Nom du produit, marque, etc.)", "")
 
-# --- Page Content ---
-filtered_data = filter_data(df, selected_year, selected_dates, selected_subcategories, selected_risks, search_term)
+    if page == "Accueil":
+        st.title("Accueil - Dashboard des Rappels de Produits")
+        st.write("Ce tableau de bord présente uniquement les produits de la catégorie 'Alimentation'.")
 
-if page == "Accueil":
-    st.title("Accueil - Dashboard des Rappels de Produits")
-    st.write("Ce tableau de bord présente uniquement les produits de la catégorie 'Alimentation'.")
+        display_metrics(filtered_data)
+        display_recent_recalls(filtered_data)
 
-    display_metrics(filtered_data)
-    display_recent_recalls(filtered_data)
+    elif page == "Visualisation":
+        st.title("Visualisation des Rappels de Produits")
+        st.write("Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs.")
+        display_visualizations(filtered_data)
 
-elif page == "Visualisation":
-    st.title("Visualisation des Rappels de Produits")
-    st.write("Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs.")
-    display_visualizations(filtered_data)
+    elif page == "Détails":
+        st.title("Détails des Rappels de Produits")
+        st.write("Consultez ici un tableau détaillé des rappels de produits, incluant toutes les informations disponibles.")
 
-elif page == "Détails":
-    st.title("Détails des Rappels de Produits")
-    st.write("Consultez ici un tableau détaillé des rappels de produits, incluant toutes les informations disponibles.")
-
-    if not filtered_data.empty:
-        st.dataframe(filtered_data)
-        csv = filtered_data.to_csv(index=False).encode('utf-8')
-        st.download_button(label="Télécharger les données filtrées",
-                           data=csv,
-                           file_name='details_rappels.csv',
-                           mime='text/csv')
-    else:
-        st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
-
-elif page == "Chatbot":
-    st.title("Posez vos questions sur les rappels de produits")
-
-    user_question = st.text_input("Votre question:")
-    if st.button("Poser"):
-        if user_question:
-            with st.spinner("Gemini Pro réfléchit..."):
-                response = get_llm_response(user_question, filtered_data)
-                st.write(response)
+        if not filtered_data.empty:
+            st.dataframe(filtered_data)
+            csv = filtered_data.to_csv(index=False).encode('utf-8')
+            st.download_button(label="Télécharger les données filtrées",
+                               data=csv,
+                               file_name='details_rappels.csv',
+                               mime='text/csv')
         else:
-            st.warning("Veuillez saisir une question.")
+            st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
+
+    elif page == "Chatbot":
+        st.title("Posez vos questions sur les rappels de produits")
+
+        model = configure_model()  # Create the model instance
+
+        # Store chat history in session state
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+
+        user_input = st.text_area("Votre question:", height=150)
+        if st.button("Envoyer"):
+            if user_input:
+                with st.spinner('Gemini Pro réfléchit...'):
+                    relevant_data = get_relevant_data_as_text(user_input, filtered_data)
+
+                    # Start a chat session or continue the existing one
+                    convo = model.start_chat(
+                        context=relevant_data,
+                        history=st.session_state.chat_history
+                    )
+
+                    response = convo.send_message(user_input)
+                    # Update chat history
+                    st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
+                    st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
+
+                    st.write(response.text)
+            else:
+                st.warning("Veuillez saisir une question.")
+
+if __name__ == "__main__":
+    main()
