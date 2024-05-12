@@ -167,10 +167,11 @@ def get_llm_response(user_question, data):
     # 5. Combine context and user question into the full prompt
     full_prompt = context + user_question
 
-    # 6. Generate response using genai.generate_text (generation_config is no longer an argument here)
+   # 6. Generate response using genai.generate_text (pass generation_config here)
     response = genai.generate_text(
         model="gemini-1.5-pro-latest",
         prompt=full_prompt,
+        generation_config=generation_config,  # Pass generation config here
         system_instruction=system_instruction
     )
     return response.result
