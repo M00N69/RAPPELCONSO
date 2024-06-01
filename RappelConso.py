@@ -243,8 +243,9 @@ def main():
                             history=st.session_state.chat_history
                         )
 
-                        # Sending the user's input as a message
-                        response = convo.send_message(user_input)
+                        # Send relevant data as context in the message
+                        message = relevant_data + "\n\nQuestion: " + user_input
+                        response = convo.send_message(message)
                         # Update chat history
                         st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
                         st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
