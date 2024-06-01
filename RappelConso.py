@@ -235,20 +235,23 @@ def main():
         if st.button("Envoyer"):
             if user_input:
                 with st.spinner('Gemini Pro réfléchit...'):
-                    relevant_data = get_relevant_data_as_text(user_input, filtered_data)
+                    try:
+                        relevant_data = get_relevant_data_as_text(user_input, filtered_data)
 
-                    # Start a chat session or continue the existing one
-                    convo = model.start_chat(
-                        context=relevant_data,
-                        history=st.session_state.chat_history
-                    )
+                        # Start a chat session or continue the existing one
+                        convo = model.start_chat(
+                            context=relevant_data,
+                            history=st.session_state.chat_history
+                        )
 
-                    response = convo.send_message(user_input)
-                    # Update chat history
-                    st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
-                    st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
+                        response = convo.send_message(user_input)
+                        # Update chat history
+                        st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
+                        st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
 
-                    st.write(response.text)
+                        st.write(response.text)
+                    except Exception as e:
+                        st.error(f"An error occurred: {e}")
             else:
                 st.warning("Veuillez saisir une question.")
 
