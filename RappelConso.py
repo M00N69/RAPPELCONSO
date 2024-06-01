@@ -243,6 +243,7 @@ def main():
                             history=st.session_state.chat_history
                         )
 
+                        # Sending the user's input as a message
                         response = convo.send_message(user_input)
                         # Update chat history
                         st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
