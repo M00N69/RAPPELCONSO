@@ -136,11 +136,11 @@ def display_recent_recalls(data, start_index=0, num_columns=5, items_per_page=10
 
         # Pagination controls
         if start_index > 0:
-            if st.button("Previous"):
+            if st.button("Précédent"):
                 st.session_state.start_index -= items_per_page
 
         if end_index < num_items:
-            if st.button("Next"):
+            if st.button("Suivant"):
                 st.session_state.start_index += items_per_page
 
     else:
