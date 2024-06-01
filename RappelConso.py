@@ -113,22 +113,36 @@ def display_metrics(data):
     st.metric("Rappels dans la période sélectionnée", len(data))
     st.metric("Rappels actifs", len(active_recalls))
 
-def display_recent_recalls(data, num_columns=5):
-    """Displays recent recalls in a grid format."""
+def display_recent_recalls(data, start_index=0, num_columns=5, items_per_page=10):
+    """Displays recent recalls in a grid format with pagination."""
     if not data.empty:
         st.subheader("Derniers Rappels")
-        recent_recalls = data.nlargest(10, 'date_de_publication')
-        num_rows = (len(recent_recalls) + num_columns - 1) // num_columns
+        recent_recalls = data.nlargest(100, 'date_de_publication')  # Get the 100 most recent recalls
+        num_items = len(recent_recalls)
+        num_rows = (items_per_page + num_columns - 1) // num_columns
+
+        end_index = min(start_index + items_per_page, num_items)
+        current_recalls = recent_recalls.iloc[start_index:end_index]
 
         for i in range(num_rows):
             cols = st.columns(num_columns)
-            for col, idx in zip(cols, range(i * num_columns, min((i + 1) * num_columns, len(recent_recalls)))):
-                if idx < len(recent_recalls):
-                    row = recent_recalls.iloc[idx]
+            for col, idx in zip(cols, range(i * num_columns, min((i + 1) * num_columns, len(current_recalls)))):
+                if idx < len(current_recalls):
+                    row = current_recalls.iloc[idx]
                     col.image(row['liens_vers_les_images'],
                               caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})",
                               width=120)
                     col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
+
+        # Pagination controls
+        if start_index > 0:
+            if st.button("Previous"):
+                st.session_state.start_index -= items_per_page
+
+        if end_index < num_items:
+            if st.button("Next"):
+                st.session_state.start_index += items_per_page
+
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
@@ -207,6 +221,10 @@ def detect_language(text):
 def main():
     st.title("RappelConso - Chatbot & Dashboard")
 
+    # Initialize session state for pagination
+    if 'start_index' not in st.session_state:
+        st.session_state.start_index = 0
+
     # Load data
     df = load_data()
 
@@ -245,7 +263,7 @@ def main():
         st.write("Ce tableau de bord présente uniquement les produits de la catégorie 'Alimentation'.")
 
         display_metrics(filtered_data)
-        display_recent_recalls(filtered_data)
+        display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
 
     elif page == "Visualisation":
         st.header("Visualisation des Rappels de Produits")
