@@ -5,6 +5,7 @@ import requests
 from datetime import datetime
 from dateutil.parser import parse
 import google.generativeai as genai
+from langdetect import detect
 
 # --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
@@ -160,6 +161,12 @@ def configure_model():
         system_instruction=system_instruction,
     )
 
+def detect_language(text):
+    try:
+        return detect(text)
+    except:
+        return "en"
+
 def main():
     st.title("RappelConso - Chatbot & Dashboard")
 
@@ -237,7 +244,7 @@ def main():
                 with st.spinner('Gemini Pro réfléchit...'):
                     try:
                         # Detect the language of the input
-                        language = 'fr' if user_input.lower().strip().startswith(('quels', 'quelle', 'comment', 'pourquoi', 'où', 'qui', 'quand')) else 'en'
+                        language = detect_language(user_input)
 
                         # Set default period to the current year
                         current_year = datetime.now().year
@@ -257,7 +264,10 @@ def main():
                         st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
                         st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
 
-                        st.write(response.text)
+                        if language == 'fr':
+                            st.write(response.text)
+                        else:
+                            st.write(response.text)
                     except Exception as e:
                         st.error(f"An error occurred: {e}")
             else:
