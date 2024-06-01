@@ -185,12 +185,14 @@ def main():
     # Sub-category and risks filters (all options selected by default, but not shown)
     all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
     all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
-    selected_subcategories = st.sidebar.multiselect("Sous-catégories",
-                                                   options=all_subcategories,
-                                                   default=all_subcategories, label_visibility='collapsed')
-    selected_risks = st.sidebar.multiselect("Risques",
-                                             options=all_risks,
-                                             default=all_risks, label_visibility='collapsed')
+
+    # Hidden multiselect for subcategories and risks
+    selected_subcategories = st.sidebar.multiselect("Sous-catégories", options=all_subcategories, default=all_subcategories, key='subcategories', label_visibility='collapsed')
+    selected_risks = st.sidebar.multiselect("Risques", options=all_risks, default=all_risks, key='risks', label_visibility='collapsed')
+
+    # Hidden text input to keep multiselect elements collapsed
+    st.sidebar.text_input("Sous-catégories (hidden)", value=";".join(selected_subcategories), label_visibility='collapsed')
+    st.sidebar.text_input("Risques (hidden)", value=";".join(selected_risks), label_visibility='collapsed')
 
     # --- Search Bar ---
     search_term = st.text_input("Rechercher (Nom du produit, marque, etc.)", "")
