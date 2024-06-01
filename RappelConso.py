@@ -6,6 +6,40 @@ from datetime import datetime
 from dateutil.parser import parse
 import google.generativeai as genai
 
+# Custom CSS for styling
+st.markdown("""
+    <style>
+        .main { 
+            font-family: "Arial", sans-serif; 
+            color: #333; 
+        }
+        h1 {
+            color: #0044cc;
+        }
+        h2 {
+            color: #0077cc;
+        }
+        .stButton>button {
+            background-color: #0044cc;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+        }
+        .stButton>button:hover {
+            background-color: #0033aa;
+        }
+        .stTextInput>div>div>input {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        .stTextInput>div>div>input:focus {
+            border-color: #0044cc;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
 START_DATE = pd.Timestamp('2021-04-01')
@@ -15,7 +49,7 @@ RELEVANT_COLUMNS = [
     'nom_de_la_marque_du_produit',
     'risques_encourus_par_le_consommateur',
     'sous_categorie_de_produit'
-]  # Columns potentially relevant for chatbot context
+]
 
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
@@ -203,19 +237,19 @@ def main():
     filtered_data = filter_data(df, selected_year, selected_dates, selected_subcategories, selected_risks, search_term)
 
     if page == "Accueil":
-        st.title("Accueil - Dashboard des Rappels de Produits")
+        st.header("Accueil - Dashboard des Rappels de Produits")
         st.write("Ce tableau de bord présente uniquement les produits de la catégorie 'Alimentation'.")
 
         display_metrics(filtered_data)
         display_recent_recalls(filtered_data)
 
     elif page == "Visualisation":
-        st.title("Visualisation des Rappels de Produits")
+        st.header("Visualisation des Rappels de Produits")
         st.write("Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs.")
         display_visualizations(filtered_data)
 
     elif page == "Détails":
-        st.title("Détails des Rappels de Produits")
+        st.header("Détails des Rappels de Produits")
         st.write("Consultez ici un tableau détaillé des rappels de produits, incluant toutes les informations disponibles.")
 
         if not filtered_data.empty:
@@ -229,7 +263,7 @@ def main():
             st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
 
     elif page == "Chatbot":
-        st.title("Posez vos questions sur les rappels de produits")
+        st.header("Posez vos questions sur les rappels de produits")
 
         model = configure_model()  # Create the model instance
 
