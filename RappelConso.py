@@ -94,7 +94,6 @@ def display_recent_recalls(data, num_columns=5):
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
-
 def display_visualizations(data):
     """Creates and displays the visualizations."""
     if not data.empty:
@@ -161,7 +160,6 @@ def configure_model():
         system_instruction=system_instruction,
     )
 
-
 def main():
     st.title("RappelConso - Chatbot & Dashboard")
 
@@ -184,19 +182,20 @@ def main():
                                        value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
 
     # Sub-category and risks filters
+    all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
     selected_subcategories = st.sidebar.multiselect("Sous-catégories",
-                                                   options=df['sous_categorie_de_produit'].unique(),
-                                                   default=df['sous_categorie_de_produit'].unique())
+                                                   options=all_subcategories,
+                                                   default=all_subcategories)
+    all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
     selected_risks = st.sidebar.multiselect("Risques",
-                                             options=df['risques_encourus_par_le_consommateur'].unique(),
-                                             default=df['risques_encourus_par_le_consommateur'].unique())
+                                             options=all_risks,
+                                             default=all_risks)
 
     # --- Search Bar ---
     search_term = st.text_input("Rechercher (Nom du produit, marque, etc.)", "")
 
     # --- Page Content ---
     filtered_data = filter_data(df, selected_year, selected_dates, selected_subcategories, selected_risks, search_term)
-
 
     if page == "Accueil":
         st.title("Accueil - Dashboard des Rappels de Produits")
