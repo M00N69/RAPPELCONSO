@@ -11,13 +11,10 @@ st.markdown("""
     <style>
         .main { 
             font-family: "Arial", sans-serif; 
-            color: #333; 
+            color: #ffffff;  /* Brighter text color */
         }
-        h1 {
-            color: #0044cc;
-        }
-        h2 {
-            color: #0077cc;
+        h1, h2, h3, h4, h5, h6 {
+            color: #1E90FF; /* Bright blue color for headers */
         }
         .stButton>button {
             background-color: #0044cc;
@@ -33,9 +30,16 @@ st.markdown("""
             border: 1px solid #ddd;
             border-radius: 5px;
             padding: 10px;
+            color: #ffffff; /* Brighter text color for input */
         }
         .stTextInput>div>div>input:focus {
             border-color: #0044cc;
+        }
+        .stMetric {
+            color: #ffffff;  /* Brighter text color for metrics */
+        }
+        .stMetricLabel {
+            color: #ffffff;  /* Brighter text color for metric labels */
         }
     </style>
 """, unsafe_allow_html=True)
@@ -305,3 +309,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
