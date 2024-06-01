@@ -240,7 +240,6 @@ def main():
 
                         # Start a chat session or continue the existing one
                         convo = model.start_chat(
-                            context=relevant_data,
                             history=st.session_state.chat_history
                         )
 
