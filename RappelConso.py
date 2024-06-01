@@ -5,7 +5,6 @@ import requests
 from datetime import datetime
 from dateutil.parser import parse
 import google.generativeai as genai
-from langdetect import detect
 
 # --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
@@ -162,10 +161,10 @@ def configure_model():
     )
 
 def detect_language(text):
-    try:
-        return detect(text)
-    except:
-        return "en"
+    french_keywords = ["quels", "quelle", "comment", "pourquoi", "où", "qui", "quand", "le", "la", "les", "un", "une", "des"]
+    if any(keyword in text.lower() for keyword in french_keywords):
+        return "fr"
+    return "en"
 
 def main():
     st.title("RappelConso - Chatbot & Dashboard")
@@ -264,10 +263,7 @@ def main():
                         st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
                         st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
 
-                        if language == 'fr':
-                            st.write(response.text)
-                        else:
-                            st.write(response.text)
+                        st.write(response.text)
                     except Exception as e:
                         st.error(f"An error occurred: {e}")
             else:
