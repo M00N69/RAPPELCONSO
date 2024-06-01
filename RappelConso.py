@@ -170,8 +170,9 @@ def main():
     st.sidebar.title("Navigation et Filtres")
     page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails", "Chatbot"])
 
-    # Year filter
-    selected_year = st.sidebar.selectbox('Sélectionner l\'année', options=sorted(df['date_de_publication'].dt.year.unique()))
+    # Year filter (set default to current year)
+    current_year = datetime.now().year
+    selected_year = st.sidebar.selectbox('Sélectionner l\'année', options=sorted(df['date_de_publication'].dt.year.unique()), index=len(sorted(df['date_de_publication'].dt.year.unique()))-1)
 
     # Date range slider
     filtered_data = df[df['date_de_publication'].dt.year == selected_year]
@@ -181,15 +182,15 @@ def main():
                                        max_value=max_date.to_pydatetime(),
                                        value=(min_date.to_pydatetime(), max_date.to_pydatetime()))
 
-    # Sub-category and risks filters
+    # Sub-category and risks filters (all options selected by default, but not shown)
     all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
+    all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
     selected_subcategories = st.sidebar.multiselect("Sous-catégories",
                                                    options=all_subcategories,
-                                                   default=all_subcategories)
-    all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
+                                                   default=all_subcategories, label_visibility='collapsed')
     selected_risks = st.sidebar.multiselect("Risques",
                                              options=all_risks,
-                                             default=all_risks)
+                                             default=all_risks, label_visibility='collapsed')
 
     # --- Search Bar ---
     search_term = st.text_input("Rechercher (Nom du produit, marque, etc.)", "")
