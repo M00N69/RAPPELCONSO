@@ -236,6 +236,13 @@ def main():
             if user_input:
                 with st.spinner('Gemini Pro réfléchit...'):
                     try:
+                        # Detect the language of the input
+                        language = 'fr' if user_input.lower().strip().startswith(('quels', 'quelle', 'comment', 'pourquoi', 'où', 'qui', 'quand')) else 'en'
+
+                        # Set default period to the current year
+                        current_year = datetime.now().year
+                        filtered_data = df[df['date_de_publication'].dt.year == current_year]
+
                         relevant_data = get_relevant_data_as_text(user_input, filtered_data)
 
                         # Start a chat session or continue the existing one
