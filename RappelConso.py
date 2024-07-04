@@ -90,8 +90,9 @@ def load_data(url=DATA_URL):
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
     df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
     
-    # START_DATE is already a Timestamp, no need for conditional conversion
-    df = df[df['date_de_publication'] >= START_DATE] 
+    # Convert START_DATE to datetime for consistent comparison
+    START_DATE_dt = START_DATE.to_pydatetime()  
+    df = df[df['date_de_publication'] >= START_DATE_dt]
     return df
 
 def filter_data(df, year, date_range, subcategories, risks, search_term):
