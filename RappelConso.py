@@ -89,7 +89,14 @@ def load_data(url=DATA_URL):
     df = pd.DataFrame([rec['fields'] for rec in data['records']])
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
     df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
-    df = df[df['date_de_publication'] >= START_DATE]
+    
+    # Ensure START_DATE is of the same dtype as df['date_de_publication']
+    if isinstance(START_DATE, str):
+        START_DATE_dt = pd.to_datetime(START_DATE)
+    else:
+        START_DATE_dt = START_DATE
+
+    df = df[df['date_de_publication'] >= START_DATE_dt]
     return df
 
 def filter_data(df, year, date_range, subcategories, risks, search_term):
@@ -327,5 +334,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
