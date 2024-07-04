@@ -46,7 +46,7 @@ st.markdown("""
 
 # --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
-START_DATE = pd.Timestamp('2021-04-01')
+START_DATE = pd.Timestamp('2021-04-01')  # Start date for filtering
 DATE_FORMAT = '%A %d %B %Y'
 RELEVANT_COLUMNS = [
     'noms_des_modeles_ou_references',
@@ -90,13 +90,8 @@ def load_data(url=DATA_URL):
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
     df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
     
-    # Ensure START_DATE is of the same dtype as df['date_de_publication']
-    if isinstance(START_DATE, str):
-        START_DATE_dt = pd.to_datetime(START_DATE)
-    else:
-        START_DATE_dt = START_DATE
-
-    df = df[df['date_de_publication'] >= START_DATE_dt]
+    # START_DATE is already a Timestamp, no need for conditional conversion
+    df = df[df['date_de_publication'] >= START_DATE] 
     return df
 
 def filter_data(df, year, date_range, subcategories, risks, search_term):
