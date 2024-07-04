@@ -48,7 +48,7 @@ st.markdown("""
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
 
 # --- Correct START_DATE declaration ---
-START_DATE = datetime(2021, 4, 1)  # Now a datetime object
+START_DATE = pd.Timestamp(datetime(2021, 4, 1))  # Now a Pandas Timestamp
 
 DATE_FORMAT = '%A %d %B %Y'
 RELEVANT_COLUMNS = [
