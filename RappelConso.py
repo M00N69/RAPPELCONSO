@@ -47,7 +47,7 @@ st.markdown("""
 # --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
 
-# --- Updated START_DATE declaration ---
+# --- Correct START_DATE declaration ---
 START_DATE = pd.Timestamp(datetime(2021, 4, 1))  # Now a Pandas Timestamp
 
 DATE_FORMAT = '%A %d %B %Y'
@@ -91,9 +91,9 @@ def load_data(url=DATA_URL):
     data = response.json()
     df = pd.DataFrame([rec['fields'] for rec in data['records']])
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
-    df['date_de_fin_de_la_procedure_de_rappel'] = pd.to_datetime(df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date), errors='coerce')
+    df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
     
-    # START_DATE is already a pandas Timestamp, so we can use it directly
+    # Direct comparison using START_DATE
     df = df[df['date_de_publication'] >= START_DATE]
     return df
 
