@@ -80,7 +80,6 @@ def load_data(url=DATA_URL):
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
 
     # Handle rows with invalid dates
-    # st.write("Rows with invalid 'date_de_publication':", df[df['date_de_publication'].isna()])
     df = df.dropna(subset=['date_de_publication'])  # Remove rows with invalid dates
 
     return df
@@ -221,17 +220,17 @@ def main():
     # Load data
     df = load_data()
 
+    # Extract unique values for subcategories and risks
+    all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
+    all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
+
     # --- Sidebar ---
     st.sidebar.title("Navigation and Filters")
     page = st.sidebar.selectbox("Choose a Page", ["Home", "Visualization", "Details", "Chatbot"])
 
-    # Sub-category and risks filters (all options selected by default, but not shown)
+    # Sub-category and risks filters (none selected by default)
     selected_subcategories = st.multiselect("Subcategories", options=all_subcategories, default=[])
     selected_risks = st.multiselect("Risks", options=all_risks, default=[])
-
-    with st.sidebar.expander("Advanced Filters", expanded=False):
-        selected_subcategories = st.multiselect("Subcategories", options=all_subcategories, default=all_subcategories)
-        selected_risks = st.multiselect("Risks", options=all_risks, default=all_risks)
 
     # --- Search Bar ---
     search_term = st.text_input("Search (Product Name, Brand, etc.)", "")
