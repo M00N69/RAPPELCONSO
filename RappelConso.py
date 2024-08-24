@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from datetime import datetime
 import google.generativeai as genai
 
@@ -63,7 +62,7 @@ data = {
 START_DATE = pd.Timestamp(datetime(2021, 4, 1))  # Pandas Timestamp for comparison
 
 # --- Gemini Pro API Settings ---
-api_key = st.secrets["api_key"]
+api_key = st.secrets.get("api_key")
 genai.configure(api_key=api_key)
 
 # --- Gemini Configuration ---
@@ -93,8 +92,10 @@ def load_data():
     # Ensure 'date_de_publication' is a datetime object
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
 
-    # Remove any rows where 'date_de_publication' could not be parsed
-    df = df.dropna(subset=['date_de_publication'])
+    # Debugging step: check for NaT values
+    if df['date_de_publication'].isna().any():
+        st.error("Some dates could not be parsed and were removed.")
+        df = df.dropna(subset=['date_de_publication'])
 
     # Filter data to only include records on or after START_DATE
     df = df[df['date_de_publication'] >= START_DATE]
@@ -138,11 +139,10 @@ def display_recent_recalls(data, start_index=0, num_columns=5, items_per_page=10
             for col, idx in zip(cols, range(i * num_columns, min((i + 1) * num_columns, len(current_recalls)))):
                 if idx < len(current_recalls):
                     row = current_recalls.iloc[idx]
-                    col.image(row['liens_vers_les_images'] if 'liens_vers_les_images' in row else "",
-                              caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})" if 'noms_des_modeles_ou_references' in row and 'nom_de_la_marque_du_produit' in row else "",
+                    col.image(row.get('liens_vers_les_images', ""),
+                              caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row.get('noms_des_modeles_ou_references', '')} ({row.get('nom_de_la_marque_du_produit', '')})",
                               width=120)
-                    if 'lien_vers_affichette_pdf' in row:
-                        col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
+                    col.markdown(f"[AFFICHETTE]({row.get('lien_vers_affichette_pdf', '')})", unsafe_allow_html=True)
 
         # Pagination controls
         if start_index > 0:
@@ -324,4 +324,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
