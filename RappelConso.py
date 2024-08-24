@@ -1,62 +1,66 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import requests
 from datetime import datetime
-from dateutil.parser import parse
 import google.generativeai as genai
 
-# Custom CSS for styling
-st.markdown("""
-    <style>
-        .main { 
-            font-family: "Arial", sans-serif; 
-            color: #ffffff;  /* Brighter text color */
+# Sample JSON data provided
+data = {
+    "nhits": 8996,
+    "parameters": {
+        "dataset": "rappelconso0",
+        "q": "categorie_de_produit:Alimentation",
+        "rows": 10000,
+        "start": 0,
+        "format": "json",
+        "timezone": "UTC"
+    },
+    "records": [
+        {
+            "datasetid": "rappelconso0",
+            "recordid": "71902465aec74c5261f9e5df78c6ee6310ecf7e2",
+            "fields": {
+                "conduites_a_tenir_par_le_consommateur": "Ne plus consommer",
+                "libelle": "Bagels Sésame Système U",
+                "rappelguid": "F57D7BC2-1373-4000-B1C3-34028C8DBFAD",
+                "nature_juridique_du_rappel": "Volontaire (sans arrêté préfectoral)",
+                "reference_fiche": "2021-03-0004",
+                "motif_du_rappel": "Présence d’un produit chimique, l’oxyde d’éthylène, à une teneur supérieure à la limite maximum réglementaire",
+                "distributeurs": "Système U",
+                "lien_vers_la_fiche_rappel": "https://rappel.conso.gouv.fr/fiche-rappel/12/Interne",
+                "risques_encourus_par_le_consommateur": "Dépassement des limites autorisées de pesticides",
+                "lien_vers_affichette_pdf": "https://rappel.conso.gouv.fr/affichettePDF/12/Interne",
+                "modalites_de_compensation": "Remboursement",
+                "zone_geographique_de_vente": "France entière",
+                "liens_vers_les_images": "https://rappel.conso.gouv.fr/image/937cc7be-cd8f-46d1-a350-483c9edc8b4f.jpg",
+                "date_de_publication": "2021-03-26T15:44:43+00:00",
+                "sous_categorie_de_produit": "Céréales et produits de boulangerie",
+                "categorie_de_produit": "Alimentation",
+                "noms_des_modeles_ou_references": "Bagels Sésame",
+                "nom_de_la_marque_du_produit": "Système U",
+                "temperature_de_conservation": "Produit à conserver à température ambiante"
+            }
+        },
+        {
+            "datasetid": "rappelconso0",
+            "recordid": "7795e774899cbd002195e593b8ee5c4d70cbdcef",
+            "fields": {
+                "conduites_a_tenir_par_le_consommateur": "Ne plus consommer Ne plus utiliser le produit Rapporter le produit au point de vente Contacter le service consommateur",
+                "numero_de_contact": "0800874187",
+                "motif_du_rappel": "présence de LISTERIA MONOCYTOGENES",
+                "distributeurs": "E. LECLERC",
+                "risques_encourus_par_le_consommateur": "Listeria monocytogenes (agent responsable de la listériose)",
+                "sous_categorie_de_produit": "Lait et produits laitiers",
+                "categorie_de_produit": "Alimentation",
+                "noms_des_modeles_ou_references": "VALENÇAY AU LAIT CRU DE CHÈVRE APPELLATION D'ORIGINE PROTÉGÉE 220 g",
+                "date_de_publication": "2021-04-15T12:30:00+00:00"
+            }
         }
-        h1, h2, h3, h4, h5, h6 {
-            color: #1E90FF; /* Bright blue color for headers */
-        }
-        .stButton>button {
-            background-color: #0044cc;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            padding: 10px 20px;
-        }
-        .stButton>button:hover {
-            background-color: #0033aa;
-        }
-        .stTextInput>div>div>input {
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 10px;
-            color: #ffffff; /* Brighter text color for input */
-        }
-        .stTextInput>div>div>input:focus {
-            border-color: #0044cc;
-        }
-        .stMetric {
-            color: #ffffff;  /* Brighter text color for metrics */
-        }
-        .stMetricLabel {
-            color: #ffffff;  /* Brighter text color for metric labels */
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- Constants ---
-DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
+    ]
+}
 
 # --- Correct START_DATE declaration ---
-START_DATE = pd.Timestamp(datetime(2021, 4, 1))  # Now a Pandas Timestamp
-
-DATE_FORMAT = '%A %d %B %Y'
-RELEVANT_COLUMNS = [
-    'noms_des_modeles_ou_references',
-    'nom_de_la_marque_du_produit',
-    'risques_encourus_par_le_consommateur',
-    'sous_categorie_de_produit'
-]
+START_DATE = pd.Timestamp(datetime(2021, 4, 1))  # Pandas Timestamp for comparison
 
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
@@ -77,37 +81,24 @@ Avoid making subjective statements or offering opinions. Base your responses str
 
 # --- Helper Functions ---
 
-def safe_parse_date(date_str, fmt=DATE_FORMAT):
-    """Parses a date string, trying a specific format first and then falling back to dateutil."""
-    try:
-        return pd.to_datetime(date_str, format=fmt, errors='coerce')
-    except ValueError:
-        return parse(date_str, dayfirst=True, yearfirst=False)
+def safe_parse_date(date_str):
+    """Parses a date string safely into a datetime object."""
+    return pd.to_datetime(date_str, errors='coerce')
 
 @st.cache_data
-def load_data(url=DATA_URL):
-    """Loads and preprocesses the recall data."""
-    response = requests.get(url)
-    data = response.json()
-    df = pd.DataFrame([rec['fields'] for rec in data['records']])
+def load_data():
+    """Loads and preprocesses the recall data from the provided JSON."""
+    df = pd.DataFrame([record['fields'] for record in data['records']])
 
     # Ensure 'date_de_publication' is a datetime object
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
 
-    # Debug: Check the data types
-    st.write("Data types after conversion:", df.dtypes)
+    # Remove any rows where 'date_de_publication' could not be parsed
+    df = df.dropna(subset=['date_de_publication'])
 
-    # Ensure no invalid dates are in the column
-    df = df[df['date_de_publication'].notna()]
-
-    # Ensure 'date_de_fin_de_la_procedure_de_rappel' is parsed correctly
-    df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
-
-    # Debug: Check for NaT values
-    st.write("Rows with NaT in date_de_publication:", df[df['date_de_publication'].isna()])
-
-    # Direct comparison using START_DATE
+    # Filter data to only include records on or after START_DATE
     df = df[df['date_de_publication'] >= START_DATE]
+
     return df
 
 def filter_data(df, year, date_range, subcategories, risks, search_term):
@@ -127,7 +118,7 @@ def filter_data(df, year, date_range, subcategories, risks, search_term):
 
 def display_metrics(data):
     """Displays key metrics about the recalls."""
-    active_recalls = data[data['date_de_fin_de_la_procedure_de_rappel'] > datetime.now()]
+    active_recalls = data[data['date_de_publication'] > datetime.now()]
     st.metric("Rappels dans la période sélectionnée", len(data))
     st.metric("Rappels actifs", len(active_recalls))
 
@@ -147,10 +138,11 @@ def display_recent_recalls(data, start_index=0, num_columns=5, items_per_page=10
             for col, idx in zip(cols, range(i * num_columns, min((i + 1) * num_columns, len(current_recalls)))):
                 if idx < len(current_recalls):
                     row = current_recalls.iloc[idx]
-                    col.image(row['liens_vers_les_images'],
-                              caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})",
+                    col.image(row['liens_vers_les_images'] if 'liens_vers_les_images' in row else "",
+                              caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})" if 'noms_des_modeles_ou_references' in row and 'nom_de_la_marque_du_produit' in row else "",
                               width=120)
-                    col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
+                    if 'lien_vers_affichette_pdf' in row:
+                        col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
 
         # Pagination controls
         if start_index > 0:
@@ -171,30 +163,14 @@ def display_visualizations(data):
         significant_categories = value_counts[value_counts >= 2]
         filtered_categories_data = data[data['sous_categorie_de_produit'].isin(significant_categories.index)]
 
-        legal_counts = data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
-        significant_legal = legal_counts[legal_counts >= 2]
-        filtered_legal_data = data[data['nature_juridique_du_rappel'].isin(significant_legal.index)]
-
-        if not filtered_categories_data.empty and not filtered_legal_data.empty:
-            col1, col2 = st.columns([2, 1])
-
-            with col1:
-                fig_products = px.pie(filtered_categories_data,
-                                      names='sous_categorie_de_produit',
-                                      title='Produits',
-                                      color_discrete_sequence=px.colors.sequential.RdBu,
-                                      width=800,
-                                      height=600)
-                st.plotly_chart(fig_products, use_container_width=False)
-
-            with col2:
-                fig_legal = px.pie(filtered_legal_data,
-                                   names='nature_juridique_du_rappel',
-                                   title='Nature juridique des rappels',
-                                   color_discrete_sequence=px.colors.sequential.RdBu,
-                                   width=800,
-                                   height=600)
-                st.plotly_chart(fig_legal, use_container_width=False)
+        if not filtered_categories_data.empty:
+            fig_products = px.pie(filtered_categories_data,
+                                  names='sous_categorie_de_produit',
+                                  title='Produits',
+                                  color_discrete_sequence=px.colors.sequential.RdBu,
+                                  width=800,
+                                  height=600)
+            st.plotly_chart(fig_products, use_container_width=False)
 
             data['month'] = data['date_de_publication'].dt.strftime('%Y-%m')
             recalls_per_month = data.groupby('month').size().reset_index(name='counts')
@@ -211,16 +187,19 @@ def display_visualizations(data):
 def get_relevant_data_as_text(user_question, data):
     """Extracts and formats relevant data from the DataFrame as text."""
     keywords = user_question.lower().split()
-    selected_rows = data[data[RELEVANT_COLUMNS].apply(
+    selected_rows = data[data.apply(
         lambda row: any(keyword in str(val).lower() for keyword in keywords for val in row),
         axis=1
-    )].head(3) # Limit to 3 rows
+    )].head(3)  # Limit to 3 rows
 
     context = "Relevant information from the RappelConso database:\n"
     for index, row in selected_rows.iterrows():
-        for col in RELEVANT_COLUMNS:
-            context += f"- {col}: {str(row[col])}\n" 
-    context += "\n"
+        context += f"- Date de publication: {row['date_de_publication'].strftime('%d/%m/%Y')}\n"
+        context += f"- Nom du produit: {row.get('noms_des_modeles_ou_references', 'N/A')}\n"
+        context += f"- Marque: {row.get('nom_de_la_marque_du_produit', 'N/A')}\n"
+        context += f"- Risques: {row.get('risques_encourus_par_le_consommateur', 'N/A')}\n"
+        context += f"- Catégorie: {row.get('sous_categorie_de_produit', 'N/A')}\n"
+        context += "\n"
     return context
 
 def configure_model():
