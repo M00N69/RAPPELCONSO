@@ -90,9 +90,16 @@ def load_data(url=DATA_URL):
     response = requests.get(url)
     data = response.json()
     df = pd.DataFrame([rec['fields'] for rec in data['records']])
+
+    # Ensure 'date_de_publication' is a datetime object
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
+
+    # Ensure no invalid dates are in the column
+    df = df[df['date_de_publication'].notna()]
+
+    # Ensure 'date_de_fin_de_la_procedure_de_rappel' is parsed correctly
     df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
-    
+
     # Direct comparison using START_DATE
     df = df[df['date_de_publication'] >= START_DATE]
     return df
