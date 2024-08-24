@@ -71,6 +71,14 @@ def load_data(url=DATA_URL):
     response = requests.get(url)
     data = response.json()
     df = pd.DataFrame([rec['fields'] for rec in data['records']])
+
+    # Convert date_de_publication to datetime using pd.to_datetime()
+    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
+
+    # Handle rows with invalid dates
+    st.write("Rows with invalid 'date_de_publication':", df[df['date_de_publication'].isna()])
+    df = df.dropna(subset=['date_de_publication'])  # Remove rows with invalid dates
+
     return df
 
 def filter_data(df, subcategories, risks, search_term):
@@ -108,7 +116,7 @@ def display_recent_recalls(data, start_index=0, num_columns=5, items_per_page=10
                 if idx < len(current_recalls):
                     row = current_recalls.iloc[idx]
                     col.image(row['liens_vers_les_images'],
-                              caption=f"{row['date_de_publication']} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})",
+                              caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})",
                               width=120)
                     col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
 
@@ -178,7 +186,7 @@ def get_relevant_data_as_text(user_question, data):
 
     context = "Relevant information from the RappelConso database:\n"
     for index, row in selected_rows.iterrows():
-        context += f"- Date of Publication: {row['date_de_publication']}\n"
+        context += f"- Date of Publication: {row['date_de_publication'].strftime('%d/%m/%Y')}\n"
         context += f"- Product Name: {row.get('noms_des_modeles_ou_references', 'N/A')}\n"
         context += f"- Brand: {row.get('nom_de_la_marque_du_produit', 'N/A')}\n"
         context += f"- Risks: {row.get('risques_encourus_par_le_consommateur', 'N/A')}\n"
