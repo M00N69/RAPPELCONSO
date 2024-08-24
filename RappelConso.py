@@ -226,8 +226,8 @@ def main():
     page = st.sidebar.selectbox("Choose a Page", ["Home", "Visualization", "Details", "Chatbot"])
 
     # Sub-category and risks filters (all options selected by default, but not shown)
-    all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
-    all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
+    selected_subcategories = st.multiselect("Subcategories", options=all_subcategories, default=[])
+    selected_risks = st.multiselect("Risks", options=all_risks, default=[])
 
     with st.sidebar.expander("Advanced Filters", expanded=False):
         selected_subcategories = st.multiselect("Subcategories", options=all_subcategories, default=all_subcategories)
