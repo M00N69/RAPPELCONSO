@@ -5,6 +5,9 @@ import requests
 from datetime import datetime
 import google.generativeai as genai
 
+# Configuration de la page
+st.set_page_config(layout="wide")
+
 # Custom CSS for styling
 st.markdown("""
     <style>
