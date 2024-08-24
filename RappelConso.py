@@ -55,16 +55,17 @@ genai.configure(api_key=api_key)
 
 # --- Gemini Configuration ---
 generation_config = genai.GenerationConfig(
-    temperature=0.7,
+    temperature=0.2,
     top_p=0.4,
     top_k=32,
     max_output_tokens=256,
 )
 
 # System Instruction
-system_instruction = """You are a helpful and informative chatbot that answers questions about food product recalls in France, using the RappelConso database. 
-Focus on providing information about recall dates, products, brands, risks, and categories. 
-Avoid making subjective statements or offering opinions. Base your responses strictly on the data provided."""
+system_instruction = """Vous êtes un chatbot utile et informatif qui répond aux questions concernant les rappels de produits alimentaires en France, en utilisant la base de données RappelConso. 
+Concentrez-vous sur la fourniture d'informations concernant les dates de rappel, les produits, les marques, les risques et les catégories. 
+Évitez de faire des déclarations subjectives ou de donner des opinions. Basez vos réponses strictement sur les données fournies. 
+Vos réponses doivent être aussi claires et précises que possible, pour éclairer les utilisateurs sur les rappels en cours ou passés."""
 
 # --- Helper Functions ---
 
@@ -79,7 +80,7 @@ def load_data(url=DATA_URL):
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
 
     # Handle rows with invalid dates
-    st.write("Rows with invalid 'date_de_publication':", df[df['date_de_publication'].isna()])
+    # st.write("Rows with invalid 'date_de_publication':", df[df['date_de_publication'].isna()])
     df = df.dropna(subset=['date_de_publication'])  # Remove rows with invalid dates
 
     return df
