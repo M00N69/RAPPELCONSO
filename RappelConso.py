@@ -228,9 +228,10 @@ def main():
     st.sidebar.title("Navigation and Filters")
     page = st.sidebar.selectbox("Choose a Page", ["Home", "Visualization", "Details", "Chatbot"])
 
-    # Sub-category and risks filters (none selected by default)
-    selected_subcategories = st.multiselect("Subcategories", options=all_subcategories, default=[])
-    selected_risks = st.multiselect("Risks", options=all_risks, default=[])
+    with st.sidebar.expander("Advanced Filters", expanded=False):
+        # Sub-category and risks filters (none selected by default)
+        selected_subcategories = st.multiselect("Subcategories", options=all_subcategories, default=[])
+        selected_risks = st.multiselect("Risks", options=all_risks, default=[])
 
     # --- Search Bar ---
     search_term = st.text_input("Search (Product Name, Brand, etc.)", "")
