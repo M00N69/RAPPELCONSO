@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import requests
 from datetime import datetime
-from dateutil.parser import parse
 import google.generativeai as genai
 
 # Custom CSS for styling
@@ -47,17 +46,6 @@ st.markdown("""
 # --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
 
-# --- Correct START_DATE declaration ---
-START_DATE = pd.Timestamp(datetime(2021, 4, 1))  # Now a Pandas Timestamp
-
-DATE_FORMAT = '%A %d %B %Y'
-RELEVANT_COLUMNS = [
-    'noms_des_modeles_ou_references',
-    'nom_de_la_marque_du_produit',
-    'risques_encourus_par_le_consommateur',
-    'sous_categorie_de_produit'
-]
-
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
 genai.configure(api_key=api_key)
@@ -77,45 +65,17 @@ Avoid making subjective statements or offering opinions. Base your responses str
 
 # --- Helper Functions ---
 
-def safe_parse_date(date_str, fmt=DATE_FORMAT):
-    """Parses a date string, trying a specific format first and then falling back to dateutil."""
-    try:
-        return pd.to_datetime(date_str, format=fmt, errors='coerce')
-    except ValueError:
-        return parse(date_str, dayfirst=True, yearfirst=False)
-
 @st.cache_data
 def load_data(url=DATA_URL):
     """Loads and preprocesses the recall data."""
     response = requests.get(url)
     data = response.json()
     df = pd.DataFrame([rec['fields'] for rec in data['records']])
-    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
-    df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
-
-    # Debugging: Show the data types in the DataFrame
-    st.write("Data types after conversion:", df.dtypes)
-
-    # Debugging: Ensure that all dates are valid
-    if df['date_de_publication'].isna().any():
-        st.write("Rows with invalid 'date_de_publication':", df[df['date_de_publication'].isna()])
-        st.error("Some dates could not be parsed and were removed.")
-        df = df.dropna(subset=['date_de_publication'])
-
-    # Direct comparison using START_DATE
-    try:
-        df = df[df['date_de_publication'] >= START_DATE.date()]
-    except TypeError as e:
-        st.error(f"TypeError encountered during date comparison: {e}")
-        st.write("Unique values in 'date_de_publication':", df['date_de_publication'].unique())
-        return pd.DataFrame()  # Return an empty DataFrame to prevent further errors
-
     return df
 
-def filter_data(df, year, date_range, subcategories, risks, search_term):
+def filter_data(df, subcategories, risks, search_term):
     """Filters the data based on user selections and search term."""
-    filtered_df = df[df['date_de_publication'].apply(lambda x: x.year) == year]
-    filtered_df = filtered_df[(filtered_df['date_de_publication'] >= date_range[0]) & (filtered_df['date_de_publication'] <= date_range[1])]
+    filtered_df = df
 
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
@@ -129,14 +89,12 @@ def filter_data(df, year, date_range, subcategories, risks, search_term):
 
 def display_metrics(data):
     """Displays key metrics about the recalls."""
-    active_recalls = data[data['date_de_fin_de_la_procedure_de_rappel'] > datetime.now()]
-    st.metric("Rappels dans la période sélectionnée", len(data))
-    st.metric("Rappels actifs", len(active_recalls))
+    st.metric("Total Recalls", len(data))
 
 def display_recent_recalls(data, start_index=0, num_columns=5, items_per_page=10):
     """Displays recent recalls in a grid format with pagination."""
     if not data.empty:
-        st.subheader("Derniers Rappels")
+        st.subheader("Latest Recalls")
         recent_recalls = data.nlargest(100, 'date_de_publication')  # Get the 100 most recent recalls
         num_items = len(recent_recalls)
         num_rows = (items_per_page + num_columns - 1) // num_columns
@@ -150,21 +108,21 @@ def display_recent_recalls(data, start_index=0, num_columns=5, items_per_page=10
                 if idx < len(current_recalls):
                     row = current_recalls.iloc[idx]
                     col.image(row['liens_vers_les_images'],
-                              caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})",
+                              caption=f"{row['date_de_publication']} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})",
                               width=120)
                     col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
 
         # Pagination controls
         if start_index > 0:
-            if st.button("Précédent"):
+            if st.button("Previous"):
                 st.session_state.start_index -= items_per_page
 
         if end_index < num_items:
-            if st.button("Suivant"):
+            if st.button("Next"):
                 st.session_state.start_index += items_per_page
 
     else:
-        st.error("Aucune donnée disponible pour l'affichage des rappels.")
+        st.error("No data available for displaying recalls.")
 
 def display_visualizations(data):
     """Creates and displays the visualizations."""
@@ -183,7 +141,7 @@ def display_visualizations(data):
             with col1:
                 fig_products = px.pie(filtered_categories_data,
                                       names='sous_categorie_de_produit',
-                                      title='Produits',
+                                      title='Products',
                                       color_discrete_sequence=px.colors.sequential.RdBu,
                                       width=800,
                                       height=600)
@@ -192,37 +150,40 @@ def display_visualizations(data):
             with col2:
                 fig_legal = px.pie(filtered_legal_data,
                                    names='nature_juridique_du_rappel',
-                                   title='Nature juridique des rappels',
+                                   title='Legal Nature of Recalls',
                                    color_discrete_sequence=px.colors.sequential.RdBu,
                                    width=800,
                                    height=600)
                 st.plotly_chart(fig_legal, use_container_width=False)
 
-            data['month'] = data['date_de_publication'].apply(lambda x: x.strftime('%Y-%m'))
+            data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
             recalls_per_month = data.groupby('month').size().reset_index(name='counts')
             fig_monthly_recalls = px.bar(recalls_per_month,
                                          x='month', y='counts',
-                                         labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
-                                         title='Nombre de rappels par mois')
+                                         labels={'month': 'Month', 'counts': 'Number of Recalls'},
+                                         title='Number of Recalls per Month')
             st.plotly_chart(fig_monthly_recalls, use_container_width=True)
         else:
-            st.error("Données insuffisantes pour un ou plusieurs graphiques.")
+            st.error("Insufficient data for one or more charts.")
     else:
-        st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
+        st.error("No data available for visualizations based on the selected filters.")
 
 def get_relevant_data_as_text(user_question, data):
     """Extracts and formats relevant data from the DataFrame as text."""
     keywords = user_question.lower().split()
-    selected_rows = data[data[RELEVANT_COLUMNS].apply(
+    selected_rows = data[data.apply(
         lambda row: any(keyword in str(val).lower() for keyword in keywords for val in row),
         axis=1
-    )].head(3) # Limit to 3 rows
+    )].head(3)  # Limit to 3 rows
 
     context = "Relevant information from the RappelConso database:\n"
     for index, row in selected_rows.iterrows():
-        for col in RELEVANT_COLUMNS:
-            context += f"- {col}: {str(row[col])}\n" 
-    context += "\n"
+        context += f"- Date of Publication: {row['date_de_publication']}\n"
+        context += f"- Product Name: {row.get('noms_des_modeles_ou_references', 'N/A')}\n"
+        context += f"- Brand: {row.get('nom_de_la_marque_du_produit', 'N/A')}\n"
+        context += f"- Risks: {row.get('risques_encourus_par_le_consommateur', 'N/A')}\n"
+        context += f"- Category: {row.get('sous_categorie_de_produit', 'N/A')}\n"
+        context += "\n"
     return context
 
 def configure_model():
@@ -249,63 +210,51 @@ def main():
     df = load_data()
 
     # --- Sidebar ---
-    st.sidebar.title("Navigation et Filtres")
-    page = st.sidebar.selectbox("Choisir une page", ["Accueil", "Visualisation", "Détails", "Chatbot"])
-
-    # Year filter (set default to current year)
-    current_year = datetime.now().year
-    selected_year = st.sidebar.selectbox('Sélectionner l\'année', options=sorted(df['date_de_publication'].apply(lambda x: x.year).unique()), index=len(sorted(df['date_de_publication'].apply(lambda x: x.year).unique()))-1)
-
-    # Date range slider
-    filtered_data = df[df['date_de_publication'].apply(lambda x: x.year) == selected_year]
-    min_date, max_date = filtered_data['date_de_publication'].min(), filtered_data['date_de_publication'].max()
-    selected_dates = st.sidebar.slider("Sélectionner la plage de dates",
-                                       min_value=min_date,
-                                       max_value=max_date,
-                                       value=(min_date, max_date))
+    st.sidebar.title("Navigation and Filters")
+    page = st.sidebar.selectbox("Choose a Page", ["Home", "Visualization", "Details", "Chatbot"])
 
     # Sub-category and risks filters (all options selected by default, but not shown)
     all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
     all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
 
-    with st.sidebar.expander("Filtres avancés", expanded=False):
-        selected_subcategories = st.multiselect("Sous-catégories", options=all_subcategories, default=all_subcategories)
-        selected_risks = st.multiselect("Risques", options=all_risks, default=all_risks)
+    with st.sidebar.expander("Advanced Filters", expanded=False):
+        selected_subcategories = st.multiselect("Subcategories", options=all_subcategories, default=all_subcategories)
+        selected_risks = st.multiselect("Risks", options=all_risks, default=all_risks)
 
     # --- Search Bar ---
-    search_term = st.text_input("Rechercher (Nom du produit, marque, etc.)", "")
+    search_term = st.text_input("Search (Product Name, Brand, etc.)", "")
 
     # --- Page Content ---
-    filtered_data = filter_data(df, selected_year, selected_dates, selected_subcategories, selected_risks, search_term)
+    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term)
 
-    if page == "Accueil":
-        st.header("Accueil - Dashboard des Rappels de Produits")
-        st.write("Ce tableau de bord présente uniquement les produits de la catégorie 'Alimentation'.")
+    if page == "Home":
+        st.header("Home - Product Recall Dashboard")
+        st.write("This dashboard only presents products in the 'Alimentation' category.")
 
         display_metrics(filtered_data)
         display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
 
-    elif page == "Visualisation":
-        st.header("Visualisation des Rappels de Produits")
-        st.write("Cette page permet d'explorer les différents aspects des rappels de produits à travers des graphiques interactifs.")
+    elif page == "Visualization":
+        st.header("Product Recall Visualizations")
+        st.write("This page allows you to explore different aspects of product recalls through interactive charts.")
         display_visualizations(filtered_data)
 
-    elif page == "Détails":
-        st.header("Détails des Rappels de Produits")
-        st.write("Consultez ici un tableau détaillé des rappels de produits, incluant toutes les informations disponibles.")
+    elif page == "Details":
+        st.header("Product Recall Details")
+        st.write("Consult a detailed table of product recalls here, including all available information.")
 
         if not filtered_data.empty:
             st.dataframe(filtered_data)
             csv = filtered_data.to_csv(index=False).encode('utf-8')
-            st.download_button(label="Télécharger les données filtrées",
+            st.download_button(label="Download Filtered Data",
                                data=csv,
                                file_name='details_rappels.csv',
                                mime='text/csv')
         else:
-            st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
+            st.error("No data to display. Please adjust your filters or choose a different year.")
 
     elif page == "Chatbot":
-        st.header("Posez vos questions sur les rappels de produits")
+        st.header("Ask Your Questions About Product Recalls")
 
         model = configure_model()  # Create the model instance
 
@@ -313,17 +262,13 @@ def main():
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
 
-        user_input = st.text_area("Votre question:", height=150)
-        if st.button("Envoyer"):
+        user_input = st.text_area("Your Question:", height=150)
+        if st.button("Send"):
             if user_input:
-                with st.spinner('Gemini Pro réfléchit...'):
+                with st.spinner('Gemini Pro is thinking...'):
                     try:
                         # Detect the language of the input
                         language = detect_language(user_input)
-
-                        # Set default period to the current year
-                        current_year = datetime.now().year
-                        filtered_data = df[df['date_de_publication'].apply(lambda x: x.year) == current_year]
 
                         relevant_data = get_relevant_data_as_text(user_input, filtered_data)
 
@@ -343,8 +288,7 @@ def main():
                     except Exception as e:
                         st.error(f"An error occurred: {e}")
             else:
-                st.warning("Veuillez saisir une question.")
+                st.warning("Please enter a question.")
 
 if __name__ == "__main__":
     main()
-
