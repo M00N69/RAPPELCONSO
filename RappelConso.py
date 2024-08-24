@@ -46,18 +46,21 @@ data = {
 }
 
 # --- Simplified START_DATE declaration ---
-START_DATE = datetime(2021, 4, 1)  # Use a plain datetime object
+START_DATE = datetime(2021, 4, 1).date()  # Use only the date part
 
 @st.cache_data
 def load_data():
     """Loads and preprocesses the recall data from the provided JSON."""
+    # Load data into DataFrame
     df = pd.DataFrame([record['fields'] for record in data['records']])
 
-    # Ensure 'date_de_publication' is a datetime object
-    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
+    # Ensure 'date_de_publication' is converted to datetime and extract only the date part
+    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
 
-    # Remove any rows where 'date_de_publication' could not be parsed
-    df = df.dropna(subset=['date_de_publication'])
+    # Debugging: Ensure that all dates are valid
+    if df['date_de_publication'].isna().any():
+        st.error("Some dates could not be parsed and were removed.")
+        df = df.dropna(subset=['date_de_publication'])
 
     # Filter data to only include records on or after START_DATE
     df = df[df['date_de_publication'] >= START_DATE]
@@ -75,5 +78,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
