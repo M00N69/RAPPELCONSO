@@ -94,11 +94,17 @@ def load_data(url=DATA_URL):
     # Ensure 'date_de_publication' is a datetime object
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
 
+    # Debug: Check the data types
+    st.write("Data types after conversion:", df.dtypes)
+
     # Ensure no invalid dates are in the column
     df = df[df['date_de_publication'].notna()]
 
     # Ensure 'date_de_fin_de_la_procedure_de_rappel' is parsed correctly
     df['date_de_fin_de_la_procedure_de_rappel'] = df['date_de_fin_de_la_procedure_de_rappel'].apply(safe_parse_date)
+
+    # Debug: Check for NaT values
+    st.write("Rows with NaT in date_de_publication:", df[df['date_de_publication'].isna()])
 
     # Direct comparison using START_DATE
     df = df[df['date_de_publication'] >= START_DATE]
@@ -339,3 +345,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
