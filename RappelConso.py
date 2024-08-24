@@ -57,13 +57,22 @@ def load_data():
     # Ensure 'date_de_publication' is converted to datetime and extract only the date part
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
 
+    # Debugging: Show the data types in the DataFrame
+    st.write("Data types after conversion:", df.dtypes)
+
     # Debugging: Ensure that all dates are valid
     if df['date_de_publication'].isna().any():
+        st.write("Rows with invalid 'date_de_publication':", df[df['date_de_publication'].isna()])
         st.error("Some dates could not be parsed and were removed.")
         df = df.dropna(subset=['date_de_publication'])
 
     # Filter data to only include records on or after START_DATE
-    df = df[df['date_de_publication'] >= START_DATE]
+    try:
+        df = df[df['date_de_publication'] >= START_DATE]
+    except TypeError as e:
+        st.error(f"TypeError encountered during date comparison: {e}")
+        st.write("Unique values in 'date_de_publication':", df['date_de_publication'].unique())
+        return pd.DataFrame()  # Return an empty DataFrame to prevent further errors
 
     return df
 
@@ -73,8 +82,11 @@ def main():
     # Load data
     df = load_data()
 
-    # Display the filtered DataFrame
-    st.write("Filtered DataFrame", df)
+    if df.empty:
+        st.error("No valid data available after filtering.")
+    else:
+        # Display the filtered DataFrame
+        st.write("Filtered DataFrame", df)
 
 if __name__ == "__main__":
     main()
