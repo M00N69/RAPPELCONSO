@@ -408,7 +408,7 @@ def main():
         f"""
         <div class="sidebar-logo-container">
             <a href="https://www.visipilot.com" target="_blank">
-                <img src="path_to_your_logo.png" alt="Visipilot Logo" class="sidebar-logo">
+                <img src="https://github.com/M00N69/RAPPELCONSO/blob/main/logo%2004%20copie.jpg" alt="Visipilot Logo" class="sidebar-logo">
             </a>
             <a href="https://www.visipilot.com" target="_blank">www.visipilot.com</a>
         </div>
