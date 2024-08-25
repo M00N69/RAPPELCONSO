@@ -239,6 +239,9 @@ def main():
     # Load data
     df = load_data()
 
+    # Ensure 'date_de_publication' is converted to datetime
+    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
+
     # Extract unique values for subcategories and risks
     all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
     all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
@@ -254,13 +257,13 @@ def main():
 
         # --- Date Range Slider ---
         # Ensure min_date and max_date are both datetime objects
-        min_date = pd.to_datetime(df['date_de_publication'].min())
-        max_date = pd.to_datetime(df['date_de_publication'].max())
+        min_date = df['date_de_publication'].min().date()  # Convert to date to avoid time inconsistencies
+        max_date = df['date_de_publication'].max().date()  # Convert to date to avoid time inconsistencies
 
         # Date filter slider
-        selected_dates = st.slider("Sélectionnez la période", 
-                                   min_value=min_date, 
-                                   max_value=max_date, 
+        selected_dates = st.slider("Sélectionnez la période",
+                                   min_value=min_date,
+                                   max_value=max_date,
                                    value=(min_date, max_date))
 
     # --- Search Bar ---
