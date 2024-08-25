@@ -403,6 +403,19 @@ def main():
                     except Exception as e:
                         st.error(f"Une erreur s'est produite: {e}")
 
+# --- Logo and Link in Sidebar ---
+    st.sidebar.markdown(
+        f"""
+        <div class="sidebar-logo-container">
+            <a href="https://www.visipilot.com" target="_blank">
+                <img src="path_to_your_logo.png" alt="Visipilot Logo" class="sidebar-logo">
+            </a>
+            <a href="https://www.visipilot.com" target="_blank">www.visipilot.com</a>
+        </div>
+        """, unsafe_allow_html=True
+    )
+
+
 if __name__ == "__main__":
     main()
 
