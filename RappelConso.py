@@ -111,14 +111,17 @@ def load_data(url=DATA_URL):
 
     return df
 
-def filter_data(df, subcategories, risks, search_term):
-    """Filters the data based on user selections and search term."""
+def filter_data(df, subcategories, risks, search_term, date_range):
+    """Filters the data based on user selections, date range, and search term."""
     filtered_df = df
 
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
     if risks:
         filtered_df = filtered_df[filtered_df['risques_encourus_par_le_consommateur'].isin(risks)]
+    
+    # Filter by date range
+    filtered_df = filtered_df[(filtered_df['date_de_publication'] >= date_range[0]) & (filtered_df['date_de_publication'] <= date_range[1])]
 
     if search_term:
         filtered_df = filtered_df[filtered_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
@@ -166,48 +169,32 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
-        
 def display_visualizations(data):
     """Creates and displays the visualizations."""
     if not data.empty:
-        value_counts = data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
-        significant_categories = value_counts[value_counts >= 2]
-        filtered_categories_data = data[data['sous_categorie_de_produit'].isin(significant_categories.index)]
+        # Top 5 subcategories and top 5 risks visualizations
+        col1, col2 = st.columns(2)
 
-        legal_counts = data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
-        significant_legal = legal_counts[legal_counts >= 2]
-        filtered_legal_data = data[data['nature_juridique_du_rappel'].isin(significant_legal.index)]
+        # Top 5 subcategories
+        top_subcategories = data['sous_categorie_de_produit'].value_counts().nlargest(5)
+        with col1:
+            fig_subcategories = px.bar(top_subcategories, x=top_subcategories.index, y=top_subcategories.values, title="Top 5 Sous-catégories")
+            st.plotly_chart(fig_subcategories, use_container_width=True)
 
-        if not filtered_categories_data.empty and not filtered_legal_data.empty:
-            col1, col2 = st.columns([2, 1])
+        # Top 5 risks
+        top_risks = data['risques_encourus_par_le_consommateur'].value_counts().nlargest(5)
+        with col2:
+            fig_risks = px.bar(top_risks, x=top_risks.index, y=top_risks.values, title="Top 5 Risques")
+            st.plotly_chart(fig_risks, use_container_width=True)
 
-            with col1:
-                fig_products = px.pie(filtered_categories_data,
-                                      names='sous_categorie_de_produit',
-                                      title='Products',
-                                      color_discrete_sequence=px.colors.sequential.RdBu,
-                                      width=800,
-                                      height=600)
-                st.plotly_chart(fig_products, use_container_width=False)
-
-            with col2:
-                fig_legal = px.pie(filtered_legal_data,
-                                   names='nature_juridique_du_rappel',
-                                   title='Legal Nature of Recalls',
-                                   color_discrete_sequence=px.colors.sequential.RdBu,
-                                   width=800,
-                                   height=600)
-                st.plotly_chart(fig_legal, use_container_width=False)
-
-            data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
-            recalls_per_month = data.groupby('month').size().reset_index(name='counts')
-            fig_monthly_recalls = px.bar(recalls_per_month,
-                                         x='month', y='counts',
-                                         labels={'month': 'Month', 'counts': 'Number of Recalls'},
-                                         title='Number of Recalls per Month')
-            st.plotly_chart(fig_monthly_recalls, use_container_width=True)
-        else:
-            st.error("Insufficient data for one or more charts.")
+        # Other visualizations
+        data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
+        recalls_per_month = data.groupby('month').size().reset_index(name='counts')
+        fig_monthly_recalls = px.bar(recalls_per_month,
+                                     x='month', y='counts',
+                                     labels={'month': 'Month', 'counts': 'Number of Recalls'},
+                                     title='Number of Recalls per Month')
+        st.plotly_chart(fig_monthly_recalls, use_container_width=True)
     else:
         st.error("No data available for visualizations based on the selected filters.")
 
@@ -260,24 +247,32 @@ def main():
     st.sidebar.title("Navigation and Filters")
     page = st.sidebar.selectbox("Choose a Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
 
-    with st.sidebar.expander("Advanced Filters", expanded=False):
+    with st.sidebar.expander("Advanced Filters", expanded=True):
         # Sub-category and risks filters (none selected by default)
         selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
+
+        # Date filter slider
+        min_date = df['date_de_publication'].min()
+        max_date = df['date_de_publication'].max()
+        selected_dates = st.slider("Sélectionnez la période", min_value=min_date, max_value=max_date, value=(min_date, max_date))
 
     # --- Search Bar ---
     search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
 
     # --- Page Content ---
-    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term)
+    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
 
     if page == "Page principale":
         st.header("Principal -  Dashboard RAPPELCONSO")
         st.write("This dashboard only presents products in the 'Alimentation' category.")
 
+        # Display two side-by-side graphs
+        display_visualizations(filtered_data)
+
+        # Display metrics and recent recalls
         display_metrics(filtered_data)
         display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
-
 
     elif page == "Visualisation":
         st.header("Product Recall Visualizations")
@@ -337,4 +332,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
