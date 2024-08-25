@@ -141,11 +141,11 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
             if start_index > 0:
-                if st.button("Previous", key="prev"):
+                if st.button("Précédent", key="prev"):
                     st.session_state.start_index -= items_per_page
         with col3:
             if end_index < len(recent_recalls):
-                if st.button("Next", key="next"):
+                if st.button("Suivant", key="next"):
                     st.session_state.start_index += items_per_page
 
         # Create two columns for displaying recall items
@@ -258,27 +258,27 @@ def main():
 
     # --- Sidebar ---
     st.sidebar.title("Navigation and Filters")
-    page = st.sidebar.selectbox("Choose a Page", ["Home", "Visualization", "Details", "Chatbot"])
+    page = st.sidebar.selectbox("Choose a Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
 
     with st.sidebar.expander("Advanced Filters", expanded=False):
         # Sub-category and risks filters (none selected by default)
-        selected_subcategories = st.multiselect("Subcategories", options=all_subcategories, default=[])
-        selected_risks = st.multiselect("Risks", options=all_risks, default=[])
+        selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
+        selected_risks = st.multiselect("Risques", options=all_risks, default=[])
 
     # --- Search Bar ---
-    search_term = st.text_input("Search (Product Name, Brand, etc.)", "")
+    search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
 
     # --- Page Content ---
     filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term)
 
     if page == "Home":
-        st.header("Home - Product Recall Dashboard")
+        st.header("Principal -  Dashboard RAPPELCONSO")
         st.write("This dashboard only presents products in the 'Alimentation' category.")
 
         display_metrics(filtered_data)
         display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
 
-    elif page == "Visualization":
+    elif page == "Visualisation":
         st.header("Product Recall Visualizations")
         st.write("This page allows you to explore different aspects of product recalls through interactive charts.")
         display_visualizations(filtered_data)
