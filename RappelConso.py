@@ -255,23 +255,24 @@ def main():
         selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
 
-        # --- Date Range Slider ---
-        # Ensure min_date and max_date are both datetime objects
+        # Date filter slider
         min_date = df['date_de_publication'].min().date()  # Convert to date to avoid time inconsistencies
         max_date = df['date_de_publication'].max().date()  # Convert to date to avoid time inconsistencies
 
-        # Date filter slider
         selected_dates = st.slider("Sélectionnez la période",
                                    min_value=min_date,
                                    max_value=max_date,
                                    value=(min_date, max_date))
 
-    # --- Search Bar ---
-    search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
+    # Filter data based on user selections
+    st.write(f"Subcategories selected: {selected_subcategories}")
+    st.write(f"Risks selected: {selected_risks}")
+    st.write(f"Date range selected: {selected_dates}")
+    st.write(f"Search term: {search_term}")
 
-    # --- Page Content ---
     filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term)
 
+    # --- Page Content ---
     if page == "Page principale":
         st.header("Principal -  Dashboard RAPPELCONSO")
         st.write("This dashboard only presents products in the 'Alimentation' category.")
