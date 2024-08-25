@@ -137,7 +137,18 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
         end_index = min(start_index + items_per_page, len(recent_recalls))
         current_recalls = recent_recalls.iloc[start_index:end_index]
 
-        # Create two columns
+        # Pagination controls on a single line with buttons on the left and right
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if start_index > 0:
+                if st.button("Previous", key="prev"):
+                    st.session_state.start_index -= items_per_page
+        with col3:
+            if end_index < len(recent_recalls):
+                if st.button("Next", key="next"):
+                    st.session_state.start_index += items_per_page
+
+        # Create two columns for displaying recall items
         col1, col2 = st.columns(2)
 
         for idx, row in current_recalls.iterrows():
@@ -153,22 +164,8 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
-
-        # Pagination controls
-        st.markdown('<div class="pagination-container">', unsafe_allow_html=True)
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if start_index > 0:
-                if st.button("Previous"):
-                    st.session_state.start_index -= items_per_page
-        with col2:
-            if end_index < len(recent_recalls):
-                if st.button("Next"):
-                    st.session_state.start_index += items_per_page
-        st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
-
 def display_visualizations(data):
     """Creates and displays the visualizations."""
     if not data.empty:
