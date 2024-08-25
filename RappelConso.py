@@ -130,11 +130,17 @@ def display_metrics(data):
     st.metric("Total Recalls", len(data))
 
 def display_recent_recalls(data, start_index=0, items_per_page=10):
+    """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
     if not data.empty:
         st.subheader("Derniers Rappels")
         recent_recalls = data.nlargest(100, 'date_de_publication')  # Get the 100 most recent recalls
         end_index = min(start_index + items_per_page, len(recent_recalls))
         current_recalls = recent_recalls.iloc[start_index:end_index]
+
+        # Debugging output
+        st.write(f"Start Index: {start_index}")
+        st.write(f"End Index: {end_index}")
+        st.write(f"Total Recalls: {len(recent_recalls)}")
 
         # Pagination controls on a single line with buttons on the left and right
         col1, col2, col3 = st.columns([1, 2, 1])
@@ -164,6 +170,7 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
                 """, unsafe_allow_html=True)
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
+
         
 def display_visualizations(data):
     """Creates and displays the visualizations."""
