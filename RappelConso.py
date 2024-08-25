@@ -247,30 +247,32 @@ def main():
     st.sidebar.title("Navigation and Filters")
     page = st.sidebar.selectbox("Choose a Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
 
-    with st.sidebar.expander("Advanced Filters", expanded=True):
+    with st.sidebar.expander("Advanced Filters", expanded=False):
         # Sub-category and risks filters (none selected by default)
         selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
 
+        # --- Date Range Slider ---
+        # Ensure min_date and max_date are both datetime objects
+        min_date = pd.to_datetime(df['date_de_publication'].min())
+        max_date = pd.to_datetime(df['date_de_publication'].max())
+
         # Date filter slider
-        min_date = df['date_de_publication'].min()
-        max_date = df['date_de_publication'].max()
-        selected_dates = st.slider("Sélectionnez la période", min_value=min_date, max_value=max_date, value=(min_date, max_date))
+        selected_dates = st.slider("Sélectionnez la période", 
+                                   min_value=min_date, 
+                                   max_value=max_date, 
+                                   value=(min_date, max_date))
 
     # --- Search Bar ---
     search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
 
     # --- Page Content ---
-    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
+    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term)
 
     if page == "Page principale":
         st.header("Principal -  Dashboard RAPPELCONSO")
         st.write("This dashboard only presents products in the 'Alimentation' category.")
 
-        # Display two side-by-side graphs
-        display_visualizations(filtered_data)
-
-        # Display metrics and recent recalls
         display_metrics(filtered_data)
         display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
 
@@ -332,5 +334,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
