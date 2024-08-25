@@ -359,9 +359,9 @@ def main():
         model = configure_model()  # Créez l'instance du modèle
 
         if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+            st.session_state.chat_history = []
 
-        user_input = st.text_area("Votre question:", height=150)
+            user_input = st.text_area("Votre question:", height=150)
 
         if st.button("Envoyer"):
         if user_input.strip() == "":
