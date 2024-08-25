@@ -11,13 +11,54 @@ st.set_page_config(layout="wide")
 # Custom CSS for styling
 st.markdown("""
     <style>
-        .main { 
-            font-family: "Arial", sans-serif; 
-            color: #ffffff;  /* Brighter text color */
+        /* Container for each recall item */
+        .recall-container {
+            background-color: #f9f9f9;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
         }
-        h1, h2, h3, h4, h5, h6 {
-            color: #1E90FF; /* Bright blue color for headers */
+        
+        /* Image styling */
+        .recall-image {
+            width: 120px;
+            height: auto;
+            border-radius: 10px;
+            margin-right: 20px;
         }
+        
+        /* Text styling within the recall container */
+        .recall-content {
+            flex-grow: 1;
+        }
+
+        .recall-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .recall-date {
+            color: #555;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+
+        .recall-description {
+            font-size: 1em;
+            color: #333;
+        }
+        
+        /* Pagination buttons */
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+
         .stButton>button {
             background-color: #0044cc;
             color: white;
@@ -25,23 +66,9 @@ st.markdown("""
             border-radius: 5px;
             padding: 10px 20px;
         }
+
         .stButton>button:hover {
             background-color: #0033aa;
-        }
-        .stTextInput>div>div>input {
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 10px;
-            color: #ffffff; /* Brighter text color for input */
-        }
-        .stTextInput>div>div>input:focus {
-            border-color: #0044cc;
-        }
-        .stMetric {
-            color: #ffffff;  /* Brighter text color for metrics */
-        }
-        .stMetricLabel {
-            color: #ffffff;  /* Brighter text color for metric labels */
         }
     </style>
 """, unsafe_allow_html=True)
@@ -102,38 +129,45 @@ def display_metrics(data):
     """Displays key metrics about the recalls."""
     st.metric("Total Recalls", len(data))
 
-def display_recent_recalls(data, start_index=0, num_columns=5, items_per_page=10):
-    """Displays recent recalls in a grid format with pagination."""
+def display_recent_recalls(data, start_index=0, items_per_page=10):
+    """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
     if not data.empty:
-        st.subheader("Latest Recalls")
+        st.subheader("Derniers Rappels")
         recent_recalls = data.nlargest(100, 'date_de_publication')  # Get the 100 most recent recalls
-        num_items = len(recent_recalls)
-        num_rows = (items_per_page + num_columns - 1) // num_columns
-
-        end_index = min(start_index + items_per_page, num_items)
+        end_index = min(start_index + items_per_page, len(recent_recalls))
         current_recalls = recent_recalls.iloc[start_index:end_index]
 
-        for i in range(num_rows):
-            cols = st.columns(num_columns)
-            for col, idx in zip(cols, range(i * num_columns, min((i + 1) * num_columns, len(current_recalls)))):
-                if idx < len(current_recalls):
-                    row = current_recalls.iloc[idx]
-                    col.image(row['liens_vers_les_images'],
-                              caption=f"{row['date_de_publication'].strftime('%d/%m/%Y')} - {row['noms_des_modeles_ou_references']} ({row['nom_de_la_marque_du_produit']})",
-                              width=120)
-                    col.markdown(f"[AFFICHETTE]({row['lien_vers_affichette_pdf']})", unsafe_allow_html=True)
+        # Create two columns
+        col1, col2 = st.columns(2)
+
+        for idx, row in current_recalls.iterrows():
+            with col1 if idx % 2 == 0 else col2:
+                st.markdown(f"""
+                    <div class="recall-container">
+                        <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
+                        <div class="recall-content">
+                            <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
+                            <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
+                            <div class="recall-description">{row['nom_de_la_marque_du_produit']}</div>
+                            <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
 
         # Pagination controls
-        if start_index > 0:
-            if st.button("Previous"):
-                st.session_state.start_index -= items_per_page
-
-        if end_index < num_items:
-            if st.button("Next"):
-                st.session_state.start_index += items_per_page
-
+        st.markdown('<div class="pagination-container">', unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if start_index > 0:
+                if st.button("Previous"):
+                    st.session_state.start_index -= items_per_page
+        with col2:
+            if end_index < len(recent_recalls):
+                if st.button("Next"):
+                    st.session_state.start_index += items_per_page
+        st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.error("No data available for displaying recalls.")
+        st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
 def display_visualizations(data):
     """Creates and displays the visualizations."""
