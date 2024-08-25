@@ -364,7 +364,7 @@ def main():
             user_input = st.text_area("Votre question:", height=150)
 
         if st.button("Envoyer"):
-        if user_input.strip() == "":
+            if user_input.strip() == "":
             st.warning("Veuillez entrer une question valide.")
         else:
             with st.spinner('Gemini Pro réfléchit...'):
