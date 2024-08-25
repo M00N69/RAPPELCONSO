@@ -133,7 +133,7 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
     """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
     if not data.empty:
         st.subheader("Derniers Rappels")
-        recent_recalls = data.nlargest(100, 'date_de_publication')  # Get the 100 most recent recalls
+        recent_recalls = data.sort_values(by='date_de_publication', ascending=False)  # Sort all recalls by date
         end_index = min(start_index + items_per_page, len(recent_recalls))
         current_recalls = recent_recalls.iloc[start_index:end_index]
 
