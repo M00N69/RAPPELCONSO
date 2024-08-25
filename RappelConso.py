@@ -296,10 +296,10 @@ def main():
     all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
 
     # --- Sidebar ---
-    st.sidebar.title("Navigation and Filters")
-    page = st.sidebar.selectbox("Choose a Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
+    st.sidebar.title("Navigation & Filtres")
+    page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
 
-    with st.sidebar.expander("Advanced Filters", expanded=False):
+    with st.sidebar.expander("Filtres avancés", expanded=False):
         # Sub-category and risks filters (none selected by default)
         selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
