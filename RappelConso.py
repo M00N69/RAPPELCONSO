@@ -137,11 +137,6 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
         end_index = min(start_index + items_per_page, len(recent_recalls))
         current_recalls = recent_recalls.iloc[start_index:end_index]
 
-        # Debugging output
-        st.write(f"Start Index: {start_index}")
-        st.write(f"End Index: {end_index}")
-        st.write(f"Total Recalls: {len(recent_recalls)}")
-
         # Pagination controls on a single line with buttons on the left and right
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
