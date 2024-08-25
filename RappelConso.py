@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import requests
-from datetime import datetime, date
+from datetime import datetime
 import google.generativeai as genai
 
 # Configuration de la page
@@ -70,6 +70,15 @@ st.markdown("""
         .stButton>button:hover {
             background-color: #0033aa;
         }
+
+        /* Chart styling */
+        .chart-container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -113,25 +122,15 @@ def load_data(url=DATA_URL):
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
-    filtered_df = df.copy()
+    filtered_df = df[df['date_de_publication'].between(date_range[0], date_range[1])]
 
-    # Filter by subcategories
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
-
-    # Filter by risks
     if risks:
         filtered_df = filtered_df[filtered_df['risques_encourus_par_le_consommateur'].isin(risks)]
 
-    # Filter by search term
     if search_term:
-        filtered_df = filtered_df[filtered_df.apply(
-            lambda row: search_term.lower() in str(row).lower(), axis=1)]
-
-    # Filter by date range
-    start_date, end_date = date_range
-    filtered_df = filtered_df[(filtered_df['date_de_publication'].dt.date >= start_date) &
-                              (filtered_df['date_de_publication'].dt.date <= end_date)]
+        filtered_df = filtered_df[filtered_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
 
     return filtered_df
 
@@ -189,37 +188,55 @@ def display_visualizations(data):
         filtered_legal_data = data[data['nature_juridique_du_rappel'].isin(significant_legal.index)]
 
         if not filtered_categories_data.empty and not filtered_legal_data.empty:
-            col1, col2 = st.columns([2, 1])
+            col1, col2 = st.columns(2)
 
             with col1:
                 fig_products = px.pie(filtered_categories_data,
                                       names='sous_categorie_de_produit',
-                                      title='Top 5 Sous-catégories',
+                                      title='Sous-catégories',
                                       color_discrete_sequence=px.colors.sequential.RdBu,
-                                      width=800,
-                                      height=600)
-                st.plotly_chart(fig_products, use_container_width=False)
+                                      width=600,
+                                      height=400)
+                st.plotly_chart(fig_products, use_container_width=True)
 
             with col2:
                 fig_legal = px.pie(filtered_legal_data,
                                    names='nature_juridique_du_rappel',
-                                   title='Top 5 Risques',
+                                   title='Décision de rappel',
                                    color_discrete_sequence=px.colors.sequential.RdBu,
-                                   width=800,
-                                   height=600)
-                st.plotly_chart(fig_legal, use_container_width=False)
-
-            data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
-            recalls_per_month = data.groupby('month').size().reset_index(name='counts')
-            fig_monthly_recalls = px.bar(recalls_per_month,
-                                         x='month', y='counts',
-                                         labels={'month': 'Month', 'counts': 'Number of Recalls'},
-                                         title='Number of Recalls per Month')
-            st.plotly_chart(fig_monthly_recalls, use_container_width=True)
+                                   width=600,
+                                   height=400)
+                st.plotly_chart(fig_legal, use_container_width=True)
         else:
-            st.error("Insufficient data for one or more charts.")
+            st.error("Données insuffisantes pour un ou plusieurs graphiques.")
     else:
-        st.error("No data available for visualizations based on the selected filters.")
+        st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
+
+def display_top_charts(data):
+    """Displays top 5 charts for categories and risks."""
+    top_categories = data['sous_categorie_de_produit'].value_counts().nlargest(5)
+    top_risks = data['risques_encourus_par_le_consommateur'].value_counts().nlargest(5)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
+        fig_top_categories = px.bar(top_categories,
+                                    x=top_categories.index,
+                                    y=top_categories.values,
+                                    labels={'x': 'Sous-catégorie', 'y': 'Nombre de rappels'},
+                                    title='Top 5 des sous-catégories')
+        st.plotly_chart(fig_top_categories, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
+        fig_top_risks = px.bar(top_risks,
+                               x=top_risks.index,
+                               y=top_risks.values,
+                               labels={'x': 'Risques', 'y': 'Nombre de rappels'},
+                               title='Top 5 des risques')
+        st.plotly_chart(fig_top_risks, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 def get_relevant_data_as_text(user_question, data):
     """Extracts and formats relevant data from the DataFrame as text."""
@@ -289,34 +306,35 @@ def main():
     filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
 
     if page == "Page principale":
-        # st.header("Principal -  Dashboard RAPPELCONSO")
-        # st.write("This dashboard only presents products in the 'Alimentation' category.")
+        st.header("Principal -  Dashboard RAPPELCONSO")
+        st.write("This dashboard only presents products in the 'Alimentation' category.")
 
         display_metrics(filtered_data)
+        display_top_charts(filtered_data)  # Display top 5 charts for categories and risks
         display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
 
 
     elif page == "Visualisation":
-        st.header("Product Recall Visualizations")
-        st.write("This page allows you to explore different aspects of product recalls through interactive charts.")
+        st.header("Visualisations des rappels de produits")
+        st.write("Cette page vous permet d'explorer différents aspects des rappels de produits à travers des graphiques interactifs.")
         display_visualizations(filtered_data)
 
     elif page == "Details":
-        st.header("Product Recall Details")
-        st.write("Consult a detailed table of product recalls here, including all available information.")
+        st.header("Détails des rappels de produits")
+        st.write("Consultez un tableau détaillé des rappels de produits ici, incluant toutes les informations disponibles.")
 
         if not filtered_data.empty:
             st.dataframe(filtered_data)
             csv = filtered_data.to_csv(index=False).encode('utf-8')
-            st.download_button(label="Download Filtered Data",
+            st.download_button(label="Télécharger les données filtrées",
                                data=csv,
                                file_name='details_rappels.csv',
                                mime='text/csv')
         else:
-            st.error("No data to display. Please adjust your filters or choose a different year.")
+            st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
 
     elif page == "Chatbot":
-        st.header("Ask Your Questions About Product Recalls")
+        st.header("Posez vos questions sur les rappels de produits")
 
         model = configure_model()  # Create the model instance
 
@@ -324,10 +342,10 @@ def main():
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
 
-        user_input = st.text_area("Your Question:", height=150)
-        if st.button("Send"):
+        user_input = st.text_area("Votre question:", height=150)
+        if st.button("Envoyer"):
             if user_input:
-                with st.spinner('Gemini Pro is thinking...'):
+                with st.spinner('Gemini Pro réfléchit...'):
                     try:
                         # Detect the language of the input
                         language = detect_language(user_input)
@@ -348,9 +366,10 @@ def main():
 
                         st.write(response.text)
                     except Exception as e:
-                        st.error(f"An error occurred: {e}")
+                        st.error(f"Une erreur s'est produite: {e}")
             else:
-                st.warning("Please enter a question.")
+                st.warning("Veuillez saisir une question.")
 
 if __name__ == "__main__":
     main()
+
