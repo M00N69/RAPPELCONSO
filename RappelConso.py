@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import requests
 from datetime import datetime
+import google.generativeai as genai
 
 # Configuration de la page
 st.set_page_config(layout="wide")
@@ -83,6 +84,22 @@ st.markdown("""
 
 # --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
+
+# --- Gemini Pro API Settings ---
+api_key = st.secrets["api_key"]
+genai.configure(api_key=api_key)
+
+generation_config = genai.GenerationConfig(
+    temperature=0.2,
+    top_p=0.4,
+    top_k=32,
+    max_output_tokens=256,
+)
+
+system_instruction = """Vous êtes un chatbot utile et informatif qui répond aux questions concernant les rappels de produits alimentaires en France, en utilisant la base de données RappelConso. 
+Concentrez-vous sur la fourniture d'informations concernant les dates de rappel, les produits, les marques, les risques et les catégories. 
+Évitez de faire des déclarations subjectives ou de donner des opinions. Basez vos réponses strictement sur les données fournies. 
+Vos réponses doivent être aussi claires et précises que possible, pour éclairer les utilisateurs sur les rappels en cours ou passés."""
 
 # --- Helper Functions ---
 
@@ -191,37 +208,75 @@ def display_visualizations(data):
                                    width=600,
                                    height=400)
                 st.plotly_chart(fig_legal, use_container_width=True)
+
+            # Add a bar chart showing the number of recalls per month
+            data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
+            recalls_per_month = data.groupby('month').size().reset_index(name='counts')
+            fig_monthly_recalls = px.bar(recalls_per_month,
+                                         x='month', y='counts',
+                                         labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
+                                         title='Nombre de rappels par mois',
+                                         width=1200, height=400)
+            st.plotly_chart(fig_monthly_recalls, use_container_width=True)
         else:
-            st.error("Données insuffisantes pour un ou plusieurs graphiques.")
+            st.error("Insufficient data for one or more charts.")
     else:
-        st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
+        st.error("No data available for visualizations based on the selected filters.")
 
 def display_top_charts(data):
-    """Displays top 5 charts for categories and risks."""
-    top_categories = data['sous_categorie_de_produit'].value_counts().nlargest(5)
-    top_risks = data['risques_encourus_par_le_consommateur'].value_counts().nlargest(5)
+    """Displays top 5 subcategories and risks charts."""
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
-        fig_top_categories = px.bar(top_categories,
-                                    x=top_categories.index,
-                                    y=top_categories.values,
-                                    labels={'x': 'Sous-catégorie', 'y': 'Nombre de rappels'},
-                                    title='Top 5 des sous-catégories')
-        st.plotly_chart(fig_top_categories, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        top_subcategories = data['sous_categorie_de_produit'].value_counts().head(5)
+        fig_top_subcategories = px.bar(x=top_subcategories.index,
+                                       y=top_subcategories.values,
+                                       labels={'x': 'Sous-catégories', 'y': 'Nombre de rappels'},
+                                       title='Top 5 des sous-catégories')
+        st.plotly_chart(fig_top_subcategories, use_container_width=True)
 
     with col2:
-        st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
-        fig_top_risks = px.bar(top_risks,
-                               x=top_risks.index,
+        top_risks = data['risques_encourus_par_le_consommateur'].value_counts().head(5)
+        fig_top_risks = px.bar(x=top_risks.index,
                                y=top_risks.values,
                                labels={'x': 'Risques', 'y': 'Nombre de rappels'},
                                title='Top 5 des risques')
         st.plotly_chart(fig_top_risks, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+def get_relevant_data_as_text(user_question, data):
+    """Extracts and formats relevant data from the DataFrame as text."""
+    keywords = user_question.lower().split()
+    selected_rows = data[data.apply(
+        lambda row: any(keyword in str(val).lower() for keyword in keywords for val in row),
+        axis=1
+    )].head(3)  # Limit to 3 rows
+
+    context = "Relevant information from the RappelConso database:\n"
+    for index, row in selected_rows.iterrows():
+        context += f"- Date of Publication: {row['date_de_publication'].strftime('%d/%m/%Y')}\n"
+        context += f"- Product Name: {row.get('noms_des_modeles_ou_references', 'N/A')}\n"
+        context += f"- Brand: {row.get('nom_de_la_marque_du_produit', 'N/A')}\n"
+        context += f"- Risks: {row.get('risques_encourus_par_le_consommateur', 'N/A')}\n"
+        context += f"- Category: {row.get('sous_categorie_de_produit', 'N/A')}\n"
+        context += "\n"
+    return context
+
+def configure_model():
+    """Creates and configures a GenerativeModel instance."""
+    return genai.GenerativeModel(
+        model_name="gemini-1.5-pro-latest",
+        system_instruction=system_instruction,
+    )
+
+def detect_language(text):
+    french_keywords = ["quels", "quelle", "comment", "pourquoi", "où", "qui", "quand", "le", "la", "les", "un", "une", "des"]
+    if any(keyword in text.lower() for keyword in french_keywords):
+        return "fr"
+    return "en"
 
 def main():
     st.title("RappelConso - Chatbot & Dashboard")
@@ -289,7 +344,40 @@ def main():
     elif page == "Chatbot":
         st.header("Posez vos questions sur les rappels de produits")
 
-        # Chatbot code goes here
+        model = configure_model()  # Create the model instance
+
+        # Store chat history in session state
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+
+        user_input = st.text_area("Votre question:", height=150)
+        if st.button("Envoyer"):
+            if user_input:
+                with st.spinner('Gemini Pro réfléchit...'):
+                    try:
+                        # Detect the language of the input
+                        language = detect_language(user_input)
+
+                        relevant_data = get_relevant_data_as_text(user_input, filtered_data)
+
+                        # Start a chat session or continue the existing one
+                        convo = model.start_chat(
+                            history=st.session_state.chat_history
+                        )
+
+                        # Send relevant data as context in the message
+                        message = relevant_data + "\n\nQuestion: " + user_input
+                        response = convo.send_message(message)
+                        # Update chat history
+                        st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
+                        st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
+
+                        st.write(response.text)
+                    except Exception as e:
+                        st.error(f"Une erreur s'est produite: {e}")
+            else:
+                st.warning("Veuillez entrer une question.")
 
 if __name__ == "__main__":
     main()
+
