@@ -289,8 +289,8 @@ def main():
     filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
 
     if page == "Page principale":
-        st.header("Principal -  Dashboard RAPPELCONSO")
-        st.write("This dashboard only presents products in the 'Alimentation' category.")
+        # st.header("Principal -  Dashboard RAPPELCONSO")
+        # st.write("This dashboard only presents products in the 'Alimentation' category.")
 
         display_metrics(filtered_data)
         display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
