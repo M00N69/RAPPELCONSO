@@ -264,6 +264,9 @@ def main():
                                    max_value=max_date,
                                    value=(min_date, max_date))
 
+    # --- Search Bar ---
+    search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
+
     # Filter data based on user selections
     st.write(f"Subcategories selected: {selected_subcategories}")
     st.write(f"Risks selected: {selected_risks}")
@@ -338,6 +341,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
 
