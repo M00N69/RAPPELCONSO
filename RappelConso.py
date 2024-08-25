@@ -353,18 +353,18 @@ def main():
         else:
             st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
 
-    elif page == "Chatbot":
-        st.header("Posez vos questions sur les rappels de produits")
+ elif page == "Chatbot":
+    st.header("Posez vos questions sur les rappels de produits")
 
-        model = configure_model()  # Créez l'instance du modèle
+    model = configure_model()  # Créez l'instance du modèle
 
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
 
-            user_input = st.text_area("Votre question:", height=150)
+    user_input = st.text_area("Votre question:", height=150)
 
-        if st.button("Envoyer"):
-            if user_input.strip() == "":
+    if st.button("Envoyer"):
+        if user_input.strip() == "":
             st.warning("Veuillez entrer une question valide.")
         else:
             with st.spinner('Gemini Pro réfléchit...'):
