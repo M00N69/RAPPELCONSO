@@ -162,17 +162,20 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
         col1, col2 = st.columns(2)
         for idx, row in current_recalls.iterrows():
             with col1 if idx % 2 == 0 else col2:
-                st.markdown(f"""
-                    <div class="recall-container">
-                        <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
-                        <div class="recall-content">
-                            <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
-                            <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
-                            <div class="recall-description">{row['nom_de_la_marque_du_produit']}</div>
-                            <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
-                        </div>
+               st.markdown(f"""
+            <div class="recall-container">
+                <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
+                <div class="recall-content">
+                    <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
+                    <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
+                    <div class="recall-description">
+                        <strong>Marque:</strong> {row['nom_de_la_marque_du_produit']}<br>
+                        <strong>Motif du rappel:</strong> {row['motif_du_rappel']}
                     </div>
-                """, unsafe_allow_html=True)
+                    <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
