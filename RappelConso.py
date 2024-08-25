@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.callbacks import Points, InputDeviceState
 import requests
 from datetime import datetime
 import google.generativeai as genai
@@ -180,51 +182,68 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
         
-def display_visualizations(data):
-    """Creates and displays the visualizations."""
-    if not data.empty:
-        value_counts = data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
-        significant_categories = value_counts[value_counts >= 2]
-        filtered_categories_data = data[data['sous_categorie_de_produit'].isin(significant_categories.index)]
+def display_interactive_visualizations(data):
+    """Creates and displays the interactive visualizations with cross-filtering."""
+    
+    # Create containers for each plot
+    col1, col2 = st.columns(2)
 
-        legal_counts = data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
-        significant_legal = legal_counts[legal_counts >= 2]
-        filtered_legal_data = data[data['nature_juridique_du_rappel'].isin(significant_legal.index)]
+    # Pie chart for subcategories
+    with col1:
+        fig_subcategories = px.pie(data,
+                                   names='sous_categorie_de_produit',
+                                   title='Sous-catégories',
+                                   color_discrete_sequence=px.colors.sequential.RdBu)
+        fig_subcategories.update_traces(marker=dict(line=dict(color='#000000', width=2)))
+        st.plotly_chart(fig_subcategories)
 
-        if not filtered_categories_data.empty and not filtered_legal_data.empty:
-            col1, col2 = st.columns(2)
+    # Pie chart for recall decision types
+    with col2:
+        fig_recall_decisions = px.pie(data,
+                                      names='nature_juridique_du_rappel',
+                                      title='Décision de rappel',
+                                      color_discrete_sequence=px.colors.sequential.RdBu)
+        fig_recall_decisions.update_traces(marker=dict(line=dict(color='#000000', width=2)))
+        st.plotly_chart(fig_recall_decisions)
+        
+    # Bar chart for recalls per month
+    data['month'] = pd.to_datetime(data['date_de_publication']).dt.to_period('M').astype(str)
+    recalls_per_month = data.groupby('month').size().reset_index(name='counts')
+    fig_monthly_recalls = px.bar(recalls_per_month,
+                                 x='month', y='counts',
+                                 labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
+                                 title='Nombre de rappels par mois')
+    st.plotly_chart(fig_monthly_recalls, use_container_width=True)
 
-            with col1:
-                fig_products = px.pie(filtered_categories_data,
-                                      names='sous_categorie_de_produit',
-                                      title='Sous-catégories',
-                                      color_discrete_sequence=px.colors.sequential.RdBu,
-                                      width=600,
-                                      height=400)
-                st.plotly_chart(fig_products, use_container_width=True)
+    # Capture click events from the first pie chart (Subcategories)
+    selected_subcategory = st.session_state.get('selected_subcategory', None)
 
-            with col2:
-                fig_legal = px.pie(filtered_legal_data,
-                                   names='nature_juridique_du_rappel',
-                                   title='Décision de rappel',
-                                   color_discrete_sequence=px.colors.sequential.RdBu,
-                                   width=600,
-                                   height=400)
-                st.plotly_chart(fig_legal, use_container_width=True)
+    if st.session_state.selected_subcategory:
+        # Filter the data based on the selected subcategory
+        filtered_data = data[data['sous_categorie_de_produit'] == st.session_state.selected_subcategory]
+        st.write(f"Filtered by subcategory: {st.session_state.selected_subcategory}")
+        # Update other charts with the filtered data
+        fig_recall_decisions = px.pie(filtered_data,
+                                      names='nature_juridique_du_rappel',
+                                      title='Décision de rappel',
+                                      color_discrete_sequence=px.colors.sequential.RdBu)
+        st.plotly_chart(fig_recall_decisions)
+        fig_monthly_recalls = px.bar(filtered_data.groupby('month').size().reset_index(name='counts'),
+                                     x='month', y='counts',
+                                     labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
+                                     title='Nombre de rappels par mois')
+        st.plotly_chart(fig_monthly_recalls)
 
-            # Add a bar chart showing the number of recalls per month
-            data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
-            recalls_per_month = data.groupby('month').size().reset_index(name='counts')
-            fig_monthly_recalls = px.bar(recalls_per_month,
-                                         x='month', y='counts',
-                                         labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
-                                         title='Nombre de rappels par mois',
-                                         width=1200, height=400)
-            st.plotly_chart(fig_monthly_recalls, use_container_width=True)
+    # Use Plotly's on-click event handling to filter based on subcategory
+    @st.cache(suppress_st_warning=True)
+    def filter_by_subcategory(points):
+        if points:
+            st.session_state.selected_subcategory = points['points'][0]['label']
         else:
-            st.error("Insufficient data for one or more charts.")
-    else:
-        st.error("No data available for visualizations based on the selected filters.")
+            st.session_state.selected_subcategory = None
+
+    fig_subcategories['data'][0].on_click(filter_by_subcategory)
+
 
 def display_top_charts(data):
     """Displays top 5 subcategories and risks charts."""
@@ -337,7 +356,7 @@ def main():
     elif page == "Visualisation":
         st.header("Visualisations des rappels de produits")
         st.write("Cette page vous permet d'explorer différents aspects des rappels de produits à travers des graphiques interactifs.")
-        display_visualizations(filtered_data)
+        display_interactive_visualizations(filtered_data)
 
     elif page == "Details":
         st.header("Détails des rappels de produits")
