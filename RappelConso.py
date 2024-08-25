@@ -314,13 +314,22 @@ def main():
     # --- Search Bar ---
     search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
 
+    # --- Instructions Expander ---
+    with st.expander("Instructions d'utilisation"):
+        st.markdown("""
+        ### Instructions d'utilisation
+
+        - **Filtres Avancés** : Utilisez les filtres pour affiner votre recherche par sous-catégories, risques et périodes de temps.
+        - **Nombre Total de Rappels** : Un indicateur du nombre total de rappels correspondant aux critères sélectionnés.
+        - **Graphiques Top 5** : Deux graphiques affichent les 5 sous-catégories de produits les plus rappelées et les 5 principaux risques.
+        - **Liste des Derniers Rappels** : Une liste paginée des rappels les plus récents, incluant le nom du produit, la date de rappel, la marque, le motif du rappel, et un lien pour voir l'affichette du rappel.
+        - **Chatbot** : Posez vos questions concernant les rappels de produits et obtenez des réponses basées sur les données les plus récentes.
+        """)
+
     # --- Page Content ---
     filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
 
     if page == "Page principale":
-        # st.header("Principal -  Dashboard RAPPELCONSO")
-        # st.write("This dashboard only presents products in the 'Alimentation' category.")
-
         display_metrics(filtered_data)
         display_top_charts(filtered_data)  # Display top 5 charts for categories and risks
         display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
