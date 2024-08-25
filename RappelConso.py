@@ -353,57 +353,56 @@ def main():
         else:
             st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
 
- elif page == "Chatbot":
-    st.header("Posez vos questions sur les rappels de produits")
+    elif page == "Chatbot":
+        st.header("Posez vos questions sur les rappels de produits")
 
-    model = configure_model()  # Créez l'instance du modèle
+        model = configure_model()  # Créez l'instance du modèle
 
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
 
-    user_input = st.text_area("Votre question:", height=150)
+        user_input = st.text_area("Votre question:", height=150)
 
-    if st.button("Envoyer"):
-        if user_input.strip() == "":
-            st.warning("Veuillez entrer une question valide.")
-        else:
-            with st.spinner('Gemini Pro réfléchit...'):
-                try:
-                    # Détecter la langue de l'entrée utilisateur
-                    language = detect_language(user_input)
-
-                    # Extraire les données pertinentes des rappels filtrés
-                    relevant_data = get_relevant_data_as_text(user_input, filtered_data)
-                    
-                    # Créer un contexte structuré pour le modèle
-                    context = (
-                        "Informations sur les rappels filtrés :\n\n" +
-                        relevant_data +
-                        "\n\nQuestion de l'utilisateur : " + user_input
-                    )
-
-                    # Démarrer une session de chat ou continuer la session existante
-                    convo = model.start_chat(history=st.session_state.chat_history)
-
-                    # Envoyer le contexte structuré et la question
-                    response = convo.send_message(context)
-                    
-                    # Mettre à jour l'historique du chat
-                    st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
-                    st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
-
-                    # Afficher l'historique du chat avec une mise en forme améliorée
-                    for message in st.session_state.chat_history:
-                        role = message["role"]
-                        content = message["parts"][0]
-                        if role == "user":
-                            st.markdown(f"**Vous :** {content}")
-                        else:
-                            st.markdown(f"**Assistant :** {content}")
-                except Exception as e:
-                    st.error(f"Une erreur s'est produite: {e}")
+        if st.button("Envoyer"):
+            if user_input.strip() == "":
+                st.warning("Veuillez entrer une question valide.")
             else:
-                st.warning("Veuillez entrer une question.")
+                with st.spinner('Gemini Pro réfléchit...'):
+                    try:
+                        # Détecter la langue de l'entrée utilisateur
+                        language = detect_language(user_input)
+
+                        # Extraire les données pertinentes des rappels filtrés
+                        relevant_data = get_relevant_data_as_text(user_input, filtered_data)
+                        
+                        # Créer un contexte structuré pour le modèle
+                        context = (
+                            "Informations sur les rappels filtrés :\n\n" +
+                            relevant_data +
+                            "\n\nQuestion de l'utilisateur : " + user_input
+                        )
+
+                        # Démarrer une session de chat ou continuer la session existante
+                        convo = model.start_chat(history=st.session_state.chat_history)
+
+                        # Envoyer le contexte structuré et la question
+                        response = convo.send_message(context)
+                        
+                        # Mettre à jour l'historique du chat
+                        st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
+                        st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
+
+                        # Afficher l'historique du chat avec une mise en forme améliorée
+                        for message in st.session_state.chat_history:
+                            role = message["role"]
+                            content = message["parts"][0]
+                            if role == "user":
+                                st.markdown(f"**Vous :** {content}")
+                            else:
+                                st.markdown(f"**Assistant :** {content}")
+                    except Exception as e:
+                        st.error(f"Une erreur s'est produite: {e}")
 
 if __name__ == "__main__":
     main()
+
