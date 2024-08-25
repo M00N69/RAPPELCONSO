@@ -129,26 +129,30 @@ def display_metrics(data):
     """Displays key metrics about the recalls."""
     st.metric("Total Recalls", len(data))
 
-def display_recent_recalls(data, start_index=0, num_columns=5, items_per_page=10):
-    """Displays recent recalls in a visually appealing format with pagination."""
+def display_recent_recalls(data, start_index=0, items_per_page=10):
+    """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
     if not data.empty:
         st.subheader("Derniers Rappels")
         recent_recalls = data.nlargest(100, 'date_de_publication')  # Get the 100 most recent recalls
         end_index = min(start_index + items_per_page, len(recent_recalls))
         current_recalls = recent_recalls.iloc[start_index:end_index]
 
+        # Create two columns
+        col1, col2 = st.columns(2)
+
         for idx, row in current_recalls.iterrows():
-            st.markdown(f"""
-                <div class="recall-container">
-                    <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
-                    <div class="recall-content">
-                        <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
-                        <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
-                        <div class="recall-description">{row['nom_de_la_marque_du_produit']}</div>
-                        <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
+            with col1 if idx % 2 == 0 else col2:
+                st.markdown(f"""
+                    <div class="recall-container">
+                        <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
+                        <div class="recall-content">
+                            <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
+                            <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
+                            <div class="recall-description">{row['nom_de_la_marque_du_produit']}</div>
+                            <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
+                        </div>
                     </div>
-                </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
         # Pagination controls
         st.markdown('<div class="pagination-container">', unsafe_allow_html=True)
