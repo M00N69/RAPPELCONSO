@@ -271,12 +271,12 @@ def main():
     # --- Page Content ---
     filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term)
 
-    if page == "Home":
-        st.header("Principal -  Dashboard RAPPELCONSO")
-        st.write("This dashboard only presents products in the 'Alimentation' category.")
+    if page == "Page principale":
+    st.header("Principal -  Dashboard RAPPELCONSO")
+    st.write("This dashboard only presents products in the 'Alimentation' category.")
+    display_metrics(filtered_data)
+    display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
 
-        display_metrics(filtered_data)
-        display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
 
     elif page == "Visualisation":
         st.header("Product Recall Visualizations")
