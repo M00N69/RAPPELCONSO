@@ -185,6 +185,10 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
 def display_interactive_visualizations(data):
     """Creates and displays the interactive visualizations with cross-filtering."""
     
+    # Initialize session state for subcategory selection
+    if 'selected_subcategory' not in st.session_state:
+        st.session_state.selected_subcategory = None
+
     # Create containers for each plot
     col1, col2 = st.columns(2)
 
@@ -215,11 +219,8 @@ def display_interactive_visualizations(data):
                                  title='Nombre de rappels par mois')
     st.plotly_chart(fig_monthly_recalls, use_container_width=True)
 
-    # Capture click events from the first pie chart (Subcategories)
-    selected_subcategory = st.session_state.get('selected_subcategory', None)
-
+    # Filter the data based on the selected subcategory
     if st.session_state.selected_subcategory:
-        # Filter the data based on the selected subcategory
         filtered_data = data[data['sous_categorie_de_produit'] == st.session_state.selected_subcategory]
         st.write(f"Filtered by subcategory: {st.session_state.selected_subcategory}")
         # Update other charts with the filtered data
@@ -243,7 +244,6 @@ def display_interactive_visualizations(data):
             st.session_state.selected_subcategory = None
 
     fig_subcategories['data'][0].on_click(filter_by_subcategory)
-
 
 def display_top_charts(data):
     """Displays top 5 subcategories and risks charts."""
