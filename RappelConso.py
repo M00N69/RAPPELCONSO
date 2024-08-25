@@ -122,7 +122,11 @@ def load_data(url=DATA_URL):
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
-    filtered_df = df[df['date_de_publication'].between(date_range[0], date_range[1])]
+    # Convert date_range values to datetime
+    start_date = datetime.combine(date_range[0], datetime.min.time())
+    end_date = datetime.combine(date_range[1], datetime.min.time())
+    
+    filtered_df = df[df['date_de_publication'].between(start_date, end_date)]
 
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
@@ -218,6 +222,7 @@ def display_top_charts(data):
     top_risks = data['risques_encourus_par_le_consommateur'].value_counts().nlargest(5)
 
     col1, col2 = st.columns(2)
+
     with col1:
         st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
         fig_top_categories = px.bar(top_categories,
@@ -372,4 +377,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
