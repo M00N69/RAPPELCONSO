@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import requests
 from datetime import datetime
-import google.generativeai as genai
 
 # Configuration de la page
 st.set_page_config(layout="wide")
@@ -85,24 +84,6 @@ st.markdown("""
 # --- Constants ---
 DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
 
-# --- Gemini Pro API Settings ---
-api_key = st.secrets["api_key"]
-genai.configure(api_key=api_key)
-
-# --- Gemini Configuration ---
-generation_config = genai.GenerationConfig(
-    temperature=0.2,
-    top_p=0.4,
-    top_k=32,
-    max_output_tokens=256,
-)
-
-# System Instruction
-system_instruction = """Vous êtes un chatbot utile et informatif qui répond aux questions concernant les rappels de produits alimentaires en France, en utilisant la base de données RappelConso. 
-Concentrez-vous sur la fourniture d'informations concernant les dates de rappel, les produits, les marques, les risques et les catégories. 
-Évitez de faire des déclarations subjectives ou de donner des opinions. Basez vos réponses strictement sur les données fournies. 
-Vos réponses doivent être aussi claires et précises que possible, pour éclairer les utilisateurs sur les rappels en cours ou passés."""
-
 # --- Helper Functions ---
 
 @st.cache_data
@@ -113,7 +94,7 @@ def load_data(url=DATA_URL):
     df = pd.DataFrame([rec['fields'] for rec in data['records']])
 
     # Convert date_de_publication to datetime using pd.to_datetime()
-    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')
+    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
 
     # Handle rows with invalid dates
     df = df.dropna(subset=['date_de_publication'])  # Remove rows with invalid dates
@@ -122,11 +103,10 @@ def load_data(url=DATA_URL):
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
-    # Convert date_range values to datetime
-    start_date = datetime.combine(date_range[0], datetime.min.time())
-    end_date = datetime.combine(date_range[1], datetime.min.time())
+    start_date, end_date = date_range
     
-    filtered_df = df[df['date_de_publication'].between(start_date, end_date)]
+    # Filter by date range
+    filtered_df = df[(df['date_de_publication'] >= start_date) & (df['date_de_publication'] <= end_date)]
 
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
@@ -243,37 +223,6 @@ def display_top_charts(data):
         st.plotly_chart(fig_top_risks, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-def get_relevant_data_as_text(user_question, data):
-    """Extracts and formats relevant data from the DataFrame as text."""
-    keywords = user_question.lower().split()
-    selected_rows = data[data.apply(
-        lambda row: any(keyword in str(val).lower() for keyword in keywords for val in row),
-        axis=1
-    )].head(3)  # Limit to 3 rows
-
-    context = "Relevant information from the RappelConso database:\n"
-    for index, row in selected_rows.iterrows():
-        context += f"- Date of Publication: {row['date_de_publication'].strftime('%d/%m/%Y')}\n"
-        context += f"- Product Name: {row.get('noms_des_modeles_ou_references', 'N/A')}\n"
-        context += f"- Brand: {row.get('nom_de_la_marque_du_produit', 'N/A')}\n"
-        context += f"- Risks: {row.get('risques_encourus_par_le_consommateur', 'N/A')}\n"
-        context += f"- Category: {row.get('sous_categorie_de_produit', 'N/A')}\n"
-        context += "\n"
-    return context
-
-def configure_model():
-    """Creates and configures a GenerativeModel instance."""
-    return genai.GenerativeModel(
-        model_name="gemini-1.5-pro-latest",
-        system_instruction=system_instruction,
-    )
-
-def detect_language(text):
-    french_keywords = ["quels", "quelle", "comment", "pourquoi", "où", "qui", "quand", "le", "la", "les", "un", "une", "des"]
-    if any(keyword in text.lower() for keyword in french_keywords):
-        return "fr"
-    return "en"
-
 def main():
     st.title("RappelConso - Chatbot & Dashboard")
 
@@ -298,8 +247,8 @@ def main():
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
         
         # Date range filter
-        min_date = df['date_de_publication'].min().date()
-        max_date = df['date_de_publication'].max().date()
+        min_date = df['date_de_publication'].min()
+        max_date = df['date_de_publication'].max()
         selected_dates = st.slider("Sélectionnez la période",
                                    min_value=min_date, max_value=max_date,
                                    value=(min_date, max_date))
@@ -317,7 +266,6 @@ def main():
         display_metrics(filtered_data)
         display_top_charts(filtered_data)  # Display top 5 charts for categories and risks
         display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
-
 
     elif page == "Visualisation":
         st.header("Visualisations des rappels de produits")
@@ -341,39 +289,7 @@ def main():
     elif page == "Chatbot":
         st.header("Posez vos questions sur les rappels de produits")
 
-        model = configure_model()  # Create the model instance
-
-        # Store chat history in session state
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
-
-        user_input = st.text_area("Votre question:", height=150)
-        if st.button("Envoyer"):
-            if user_input:
-                with st.spinner('Gemini Pro réfléchit...'):
-                    try:
-                        # Detect the language of the input
-                        language = detect_language(user_input)
-
-                        relevant_data = get_relevant_data_as_text(user_input, filtered_data)
-
-                        # Start a chat session or continue the existing one
-                        convo = model.start_chat(
-                            history=st.session_state.chat_history
-                        )
-
-                        # Send relevant data as context in the message
-                        message = relevant_data + "\n\nQuestion: " + user_input
-                        response = convo.send_message(message)
-                        # Update chat history
-                        st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
-                        st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
-
-                        st.write(response.text)
-                    except Exception as e:
-                        st.error(f"Une erreur s'est produite: {e}")
-            else:
-                st.warning("Veuillez saisir une question.")
+        # Chatbot code goes here
 
 if __name__ == "__main__":
     main()
