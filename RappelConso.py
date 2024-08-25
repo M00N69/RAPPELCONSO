@@ -285,12 +285,6 @@ def main():
     # --- Search Bar ---
     search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
 
-    # Debugging output
-    st.write(f"Subcategories selected: {selected_subcategories}")
-    st.write(f"Risks selected: {selected_risks}")
-    st.write(f"Date range selected: {selected_dates}")
-    st.write(f"Search term: {search_term}")
-
     # --- Page Content ---
     filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
 
