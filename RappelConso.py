@@ -147,7 +147,7 @@ def display_metrics(data):
         st.metric("Total Recalls", len(data))
 
     with col2:
-        if st.button("🔄 Redémarrer"):
+        if st.button("🔄 Mettre à jour"):
             clear_cache()
             # Modifier un état de session pour forcer le redémarrage
             st.session_state["restart_key"] = st.session_state.get("restart_key", 0) + 1
