@@ -296,10 +296,10 @@ def main():
     all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
 
     # --- Sidebar ---
-    st.sidebar.title("Navigation and Filters")
-    page = st.sidebar.selectbox("Choose a Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
+    st.sidebar.title("Navigation & Filtres")
+    page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
 
-    with st.sidebar.expander("Advanced Filters", expanded=False):
+    with st.sidebar.expander("Filtres avancés", expanded=False):
         # Sub-category and risks filters (none selected by default)
         selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
@@ -356,39 +356,64 @@ def main():
     elif page == "Chatbot":
         st.header("Posez vos questions sur les rappels de produits")
 
-        model = configure_model()  # Create the model instance
+        model = configure_model()  # Créez l'instance du modèle
 
-        # Store chat history in session state
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
 
         user_input = st.text_area("Votre question:", height=150)
+
         if st.button("Envoyer"):
-            if user_input:
+            if user_input.strip() == "":
+                st.warning("Veuillez entrer une question valide.")
+            else:
                 with st.spinner('Gemini Pro réfléchit...'):
                     try:
-                        # Detect the language of the input
+                        # Détecter la langue de l'entrée utilisateur
                         language = detect_language(user_input)
 
+                        # Extraire les données pertinentes des rappels filtrés
                         relevant_data = get_relevant_data_as_text(user_input, filtered_data)
-
-                        # Start a chat session or continue the existing one
-                        convo = model.start_chat(
-                            history=st.session_state.chat_history
+                        
+                        # Créer un contexte structuré pour le modèle
+                        context = (
+                            "Informations sur les rappels filtrés :\n\n" +
+                            relevant_data +
+                            "\n\nQuestion de l'utilisateur : " + user_input
                         )
 
-                        # Send relevant data as context in the message
-                        message = relevant_data + "\n\nQuestion: " + user_input
-                        response = convo.send_message(message)
-                        # Update chat history
+                        # Démarrer une session de chat ou continuer la session existante
+                        convo = model.start_chat(history=st.session_state.chat_history)
+
+                        # Envoyer le contexte structuré et la question
+                        response = convo.send_message(context)
+                        
+                        # Mettre à jour l'historique du chat
                         st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
                         st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
 
-                        st.write(response.text)
+                        # Afficher l'historique du chat avec une mise en forme améliorée
+                        for message in st.session_state.chat_history:
+                            role = message["role"]
+                            content = message["parts"][0]
+                            if role == "user":
+                                st.markdown(f"**Vous :** {content}")
+                            else:
+                                st.markdown(f"**Assistant :** {content}")
                     except Exception as e:
                         st.error(f"Une erreur s'est produite: {e}")
-            else:
-                st.warning("Veuillez entrer une question.")
+
+# --- Logo and Link in Sidebar ---
+    st.sidebar.markdown(
+        f"""
+        <div class="sidebar-logo-container">
+            <a href="https://www.visipilot.com" target="_blank">
+                <img src="https://raw.githubusercontent.com/M00N69/RAPPELCONSO/main/logo%2004%20copie.jpg" alt="Visipilot Logo" class="sidebar-logo">
+            </a>
+        </div>
+        """, unsafe_allow_html=True
+    )
+
 
 if __name__ == "__main__":
     main()
