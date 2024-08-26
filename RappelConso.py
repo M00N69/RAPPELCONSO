@@ -135,9 +135,23 @@ def filter_data(df, subcategories, risks, search_term, date_range):
 
     return filtered_df
 
+# Ajoutez cette fonction pour vider le cache
+def clear_cache():
+    st.cache_data.clear()
+
 def display_metrics(data):
     """Displays key metrics about the recalls."""
-    st.metric("Total Recalls", len(data))
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        st.metric("Total Recalls", len(data))
+
+    with col2:
+        if st.button("🔄 Redémarrer"):
+            clear_cache()
+            # Modifier un état de session pour forcer le redémarrage
+            st.session_state["restart_key"] = st.session_state.get("restart_key", 0) + 1
+
 
 def display_recent_recalls(data, start_index=0, items_per_page=10):
     """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
