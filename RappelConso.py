@@ -4,7 +4,6 @@ import plotly.express as px
 import requests
 from datetime import datetime
 from urllib.parse import quote
-import json
 import google.generativeai as genai
 
 # Configuration de la page
@@ -97,8 +96,9 @@ st.markdown("""
 
 # --- Constants ---
 DATASET_ID = "rappelconso0"
-BASE_URL = "https://data.economie.gouv.fr/api/records/1.0/search/"  # URL de base, sans les paramètres
-CATEGORY_FILTER = "Plats préparés"  # Définir la catégorie ici
+BASE_URL = "https://data.economie.gouv.fr/api/records/1.0/search/"
+START_DATE = datetime(2022, 1, 1).date()  # Date de début pour le filtre
+TODAY = datetime.now().date()  # Date actuelle
 
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
@@ -120,53 +120,53 @@ Vos réponses doivent être aussi claires et précises que possible, pour éclai
 
 @st.cache_data
 def load_data():
-    """Loads and preprocesses the recall data using the records endpoint."""
+    """Loads and preprocesses the recall data using the records endpoint with date filtering."""
     all_data = []
     offset = 0
-    limit = 1000  # Limit rows to avoid timeouts
+    limit = 10000  # Maximum limit for a single request (adjust based on API limits)
 
     try:
         while True:
             params = {
                 "dataset": DATASET_ID,
+                "q": 'categorie_de_produit:"Alimentation"',  # Always filter by "Alimentation"
                 "rows": limit,
-                "start": offset
+                "start": offset,
             }
 
-            # Ajout du filtre de catégorie
-            where = f'categorie_de_produit = "{CATEGORY_FILTER}"'
-            params["where"] = where
+            # Encode special characters in the query parameter
+            params['q'] = quote(params['q'])
 
             response = requests.get(BASE_URL, params=params)
             response.raise_for_status()
 
-            data = response.json()
-            records = data.get('records', [])
-            if not records:
+            data = response.json().get('records', [])
+            if not data:
                 break
 
-            all_data.extend(records)
+            all_data.extend(data)
             offset += limit
 
-            if offset > 5000:  # Limiting the offset to prevent very long requests
+            # Add a break to prevent infinite loops if API does not handle offset correctly
+            if offset > 50000:
                 st.warning("Nombre important de rappels. Les résultats peuvent être limités.")
                 break
 
     except requests.exceptions.RequestException as e:
         st.error(f"Erreur lors du chargement des données : {e}")
         return None
-    except Exception as e:
-        st.error(f"Une erreur inattendue s'est produite : {e}")
-        return None
 
     if all_data:
         df = pd.DataFrame([rec['fields'] for rec in all_data])
         if 'date_de_publication' in df.columns:
             df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
+            # Filter by date range *after* loading data due to API limitations
+            df = df[(df['date_de_publication'] >= START_DATE) & (df['date_de_publication'] <= TODAY)]
             df = df.dropna(subset=['date_de_publication'])
         else:
             st.error("La colonne 'date_de_publication' n'existe pas dans les données.")
             return None
+
         return df
     else:
         st.error("Aucune donnée n'a été chargée.")
