@@ -5,81 +5,12 @@ import requests
 from datetime import datetime
 import google.generativeai as genai
 
-# Configuration de la page
+# Configuration de la page 
 st.set_page_config(layout="wide")
 
 # Custom CSS for styling
 st.markdown("""
-    <style>
-        /* Container for each recall item */
-        .recall-container {
-            background-color: #f9f9f9;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-        }
-
-        /* Image styling */
-        .recall-image {
-            width: 120px;
-            height: auto;
-            border-radius: 10px;
-            margin-right: 20px;
-        }
-
-        /* Text styling within the recall container */
-        .recall-content {
-            flex-grow: 1;
-        }
-
-        .recall-title {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .recall-date {
-            color: #555;
-            font-size: 0.9em;
-            margin-bottom: 10px;
-        }
-
-        .recall-description {
-            font-size: 1em;
-            color: #333;
-        }
-
-        /* Pagination buttons */
-        .pagination-container {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 30px;
-        }
-
-        .stButton>button {
-            background-color: #0044cc;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            padding: 10px 20px;
-        }
-
-        .stButton>button:hover {
-            background-color: #0033aa;
-        }
-
-        /* Chart styling */
-        .chart-container {
-            background-color: #ffffff;
-            border-radius: 10px;
-            padding: 15px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-    </style>
+     
 """, unsafe_allow_html=True)
 
 # --- Constants ---
@@ -106,7 +37,7 @@ Vos réponses doivent être aussi claires et précises que possible, pour éclai
 
 @st.cache_data
 def load_data():
-    """Loads and preprocesses the recall data using the exports endpoint."""
+    """Loads and preprocesses the recall data using the export endpoint."""
     response = requests.get(EXPORT_URL)
     if response.status_code == 200:
         try:
@@ -135,43 +66,39 @@ def filter_data(df, subcategories, risks, search_term, date_range):
     # Filter by date range
     filtered_df = df[(df['date_de_publication'] >= start_date) & (df['date_de_publication'] <= end_date)]
 
+    # Filter by subcategories
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
+
+    # Filter by risks
     if risks:
         filtered_df = filtered_df[filtered_df['risques_encourus_par_le_consommateur'].isin(risks)]
 
+    # Filter by search term
     if search_term:
-        filtered_df = filtered_df[filtered_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
+        filtered_df = filtered_df[filtered_df.apply(
+            lambda row: any(search_term.lower() in str(val).lower() for val in row),
+            axis=1
+        )]
 
     return filtered_df
 
-# Ajoutez cette fonction pour vider le cache
-def clear_cache():
-    st.cache_data.clear()
-
 def display_metrics(data):
-    """Displays key metrics about the recalls."""
-    col1, col2 = st.columns([3, 1])
+    """Displays the total number of recalls."""
+    st.markdown("## Métriques")
+    st.metric("Nombre Total de Rappels", len(data))
 
-    with col1:
-        st.metric("Total Recalls", len(data))
+def display_recent_recalls(data, start_index):
+    """Displays the recent recalls with pagination."""
+    items_per_page = 10
+    recent_recalls = data.sort_values(by='date_de_publication', ascending=False)
+    end_index = start_index + items_per_page
+    current_recalls = recent_recalls.iloc[start_index:end_index]
 
-    with col2:
-        if st.button("🔄 Mettre à jour"):
-            clear_cache()
-            # Modifier un état de session pour forcer le redémarrage
-            st.session_state["restart_key"] = st.session_state.get("restart_key", 0) + 1
+    if not current_recalls.empty:
+        st.markdown("## Rappels Récents")
 
-def display_recent_recalls(data, start_index=0, items_per_page=10):
-    """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
-    if not data.empty:
-        st.subheader("Derniers Rappels")
-        recent_recalls = data.sort_values(by='date_de_publication', ascending=False)  # Sort all recalls by date
-        end_index = min(start_index + items_per_page, len(recent_recalls))
-        current_recalls = recent_recalls.iloc[start_index:end_index]
-
-        # Pagination controls on a single line with buttons on the left and right
-        col1, col2, col3 = st.columns([1, 2, 1])
+        col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
             if start_index > 0:
                 if st.button("Précédent", key="prev"):
@@ -185,20 +112,13 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
         col1, col2 = st.columns(2)
         for idx, row in current_recalls.iterrows():
             with col1 if idx % 2 == 0 else col2:
-               st.markdown(f"""
-            <div class="recall-container">
-                <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
-                <div class="recall-content">
-                    <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
-                    <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
-                    <div class="recall-description">
-                        <strong>Marque:</strong> {row['nom_de_la_marque_du_produit']}<br>
-                        <strong>Motif du rappel:</strong> {row['motif_du_rappel']}
-                    </div>
-                    <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+                st.markdown(f"""
+                **{row['noms_des_modeles_ou_references']}**  
+                **Date de Publication:** {row['date_de_publication'].strftime('%d/%m/%Y')}  
+                **Marque:** {row['nom_de_la_marque_du_produit']}  
+                **Motif du Rappel:** {row['motif_du_rappel']}  
+                [Voir l'affichette]({row['url_affichette']})
+                """, unsafe_allow_html=True)
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
@@ -244,13 +164,13 @@ def display_visualizations(data):
                                          width=1200, height=400)
             st.plotly_chart(fig_monthly_recalls, use_container_width=True)
         else:
-            st.error("Insufficient data for one or more charts.")
+            st.error("Données insuffisantes pour un ou plusieurs graphiques.")
     else:
-        st.error("No data available for visualizations based on the selected filters.")
+        st.error("Aucune donnée disponible pour les visualisations basées sur les filtres sélectionnés.")
 
 def display_top_charts(data):
     """Displays top 5 subcategories and risks charts."""
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    st.markdown(' ', unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
 
@@ -265,12 +185,12 @@ def display_top_charts(data):
     with col2:
         top_risks = data['risques_encourus_par_le_consommateur'].value_counts().head(5)
         fig_top_risks = px.bar(x=top_risks.index,
-                               y=top_risks.values,
-                               labels={'x': 'Risques', 'y': 'Nombre de rappels'},
-                               title='Top 5 des risques')
+                              y=top_risks.values,
+                              labels={'x': 'Risques', 'y': 'Nombre de rappels'},
+                              title='Top 5 des risques')
         st.plotly_chart(fig_top_risks, use_container_width=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(" ", unsafe_allow_html=True)
 
 def get_relevant_data_as_text(user_question, data):
     """Extracts and formats relevant data from the DataFrame as text."""
@@ -280,13 +200,13 @@ def get_relevant_data_as_text(user_question, data):
         axis=1
     )].head(3)  # Limit to 3 rows
 
-    context = "Relevant information from the RappelConso database:\n"
+    context = "Informations pertinentes à partir de la base de données RappelConso:\n"
     for index, row in selected_rows.iterrows():
-        context += f"- Date of Publication: {row['date_de_publication'].strftime('%d/%m/%Y')}\n"
-        context += f"- Product Name: {row.get('noms_des_modeles_ou_references', 'N/A')}\n"
-        context += f"- Brand: {row.get('nom_de_la_marque_du_produit', 'N/A')}\n"
-        context += f"- Risks: {row.get('risques_encourus_par_le_consommateur', 'N/A')}\n"
-        context += f"- Category: {row.get('sous_categorie_de_produit', 'N/A')}\n"
+        context += f"- Date de Publication: {row['date_de_publication'].strftime('%d/%m/%Y')}\n"
+        context += f"- Nom du Produit: {row.get('noms_des_modeles_ou_references', 'N/A')}\n"
+        context += f"- Marque: {row.get('nom_de_la_marque_du_produit', 'N/A')}\n"
+        context += f"- Risques: {row.get('risques_encourus_par_le_consommateur', 'N/A')}\n"
+        context += f"- Catégorie: {row.get('sous_categorie_de_produit', 'N/A')}\n"
         context += "\n"
     return context
 
@@ -321,19 +241,19 @@ def main():
 
         # --- Sidebar ---
         st.sidebar.title("Navigation & Filtres")
-        page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
+        page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Détails", "Chatbot"])
 
         with st.sidebar.expander("Filtres avancés", expanded=False):
             # Sub-category and risks filters (none selected by default)
-            selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
+            selected_subcategories = st.multiselect("Sous-catégories", options=all_subcategories, default=[])
             selected_risks = st.multiselect("Risques", options=all_risks, default=[])
 
             # Date range filter
             min_date = df['date_de_publication'].min()
             max_date = df['date_de_publication'].max()
             selected_dates = st.slider("Sélectionnez la période",
-                                        min_value=min_date, max_value=max_date,
-                                        value=(min_date, max_date))
+                                       min_value=min_date, max_value=max_date,
+                                       value=(min_date, max_date))
 
         # --- Search Bar ---
         search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
@@ -363,7 +283,7 @@ def main():
             st.write("Cette page vous permet d'explorer différents aspects des rappels de produits à travers des graphiques interactifs.")
             display_visualizations(filtered_data)
 
-        elif page == "Details":
+        elif page == "Détails":
             st.header("Détails des rappels de produits")
             st.write("Consultez un tableau détaillé des rappels de produits ici, incluant toutes les informations disponibles.")
 
@@ -371,9 +291,9 @@ def main():
                 st.dataframe(filtered_data)
                 csv = filtered_data.to_csv(index=False).encode('utf-8')
                 st.download_button(label="Télécharger les données filtrées",
-                                    data=csv,
-                                    file_name='details_rappels.csv',
-                                    mime='text/csv')
+                                     data=csv,
+                                     file_name='details_rappels.csv',
+                                     mime='text/csv')
             else:
                 st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
 
@@ -430,11 +350,7 @@ def main():
         # --- Logo and Link in Sidebar ---
         st.sidebar.markdown(
             f"""
-            <div class="sidebar-logo-container">
-                <a href="https://www.visipilot.com" target="_blank">
-                    <img src="https://raw.githubusercontent.com/M00N69/RAPPELCONSO/main/logo%2004%20copie.jpg" alt="Visipilot Logo" class="sidebar-logo">
-                </a>
-            </div>
+            <img src="https://raw.githubusercontent.com/M00N69/RAPPELCONSO/main/logo%2004%20copie.jpg" alt="Logo" style="width:200px;">
             """, unsafe_allow_html=True
         )
     else:
@@ -442,4 +358,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
