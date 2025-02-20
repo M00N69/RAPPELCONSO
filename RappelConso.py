@@ -9,27 +9,7 @@ import google.generativeai as genai
 st.set_page_config(layout="wide")
 
 # Custom CSS for styling
-st.markdown("""
-    <style>
-        /* Container for each recall item */
-        .recall-container {
-            background-color: #f9f9f9;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            margin-bottom: 20px;
-            diimport streamlit as st
-import pandas as pd
-import plotly.express as px
-import requests
-from datetime import datetime, date
-import google.generativeai as genai
-
-# Configuration de la page
-st.set_page_config(layout="wide")
-
-# Custom CSS for styling
-st.markdown("""
+st.markdown(r"""
     <style>
         /* Container for each recall item */
         .recall-container {
@@ -455,7 +435,7 @@ def main():
 
     #Filter only if the dataframe is not empty
     if not df.empty:
-        filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
+        filtered_data = filter_data(df, selected_subcategories, risks = selected_risks, search_term=search_term, date_range=selected_dates)
     else:
         filtered_data = pd.DataFrame()
 
@@ -540,4 +520,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
     
