@@ -125,20 +125,35 @@ def load_data(url=DATA_URL):
             st.warning("API returned an empty dataset.")
             return pd.DataFrame()
 
+        st.write("First record from API:", data['records'][0]) # Examine the raw API data
+
         df = pd.DataFrame([rec['fields'] for rec in data['records']])
 
         st.write("DataFrame shape after initial load:", df.shape)
 
         # Convert date_de_publication to datetime using pd.to_datetime()
-        df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')  # Convert to datetime
+        # Try different date formats based on the API data
+        formats = ['%Y-%m-%d', '%d/%m/%Y', '%Y-%m-%dT%H:%M:%S%z', '%Y-%m-%dT%H:%M:%S.%f%z']
+        for fmt in formats:
+            try:
+                df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='raise', format=fmt)
+                break  # If successful, exit the loop
+            except ValueError:
+                continue  # If format fails, try the next one
+        else:
+            st.error(f"Unable to parse date_de_publication.  Tried formats: {formats}")
+            return pd.DataFrame()
 
         # Handle rows with invalid dates
         df = df.dropna(subset=['date_de_publication'])
 
         st.write("DataFrame shape after dropping NaN dates:", df.shape)
 
+        st.write("Minimum date in DataFrame:", df['date_de_publication'].min())  # Check date range
+        st.write("Maximum date in DataFrame:", df['date_de_publication'].max())  # Check date range
+
         # Ensure that date filtering includes the current day's data
-        df = df[df['date_de_publication'].dt.date >= START_DATE] # Correct date filtering
+        df = df[df['date_de_publication'].dt.date >= START_DATE]  # Date filtering
 
         st.write("DataFrame shape after date filtering:", df.shape)
 
@@ -507,3 +522,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
