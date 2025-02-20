@@ -87,6 +87,7 @@ st.markdown("""
 BASE_DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation"
 START_DATE = date(2022, 1, 1)  # Define the start date for filtering
 API_PAGE_SIZE = 100 # Define page size for API requests
+MAX_RECORDS_LIMIT = 10000 # Fallback limit in case total_count is missing or unreliable
 
 # --- Gemini Pro API Settings ---
 try:
@@ -115,6 +116,8 @@ def load_data(url, start_date=START_DATE):
     """Loads and preprocesses the recall data from API with date filtering."""
     all_records = []
     offset = 0
+    total_count = MAX_RECORDS_LIMIT # Fallback in case total_count is not in API response
+    fetched_count = 0 # Track fetched records to prevent infinite loop if total_count is missing/wrong
 
     start_date_str = start_date.strftime('%Y-%m-%d') # Format date for API query
     today_str = date.today().strftime('%Y-%m-%d')
@@ -123,23 +126,34 @@ def load_data(url, start_date=START_DATE):
     base_url_with_date_filter = f"{url}&refine.date_de_publication>{start_date_str}&refine.date_de_publication<{today_str}&rows={API_PAGE_SIZE}"
 
     with st.spinner("Chargement initial des données..."): # Initial loading spinner
-        while True:
+        while fetched_count < total_count: # Use fetched_count and fallback total_count to control loop
             request_url = f"{base_url_with_date_filter}&offset={offset}"
             try:
                 response = requests.get(request_url)
                 response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
                 data = response.json()
                 records = data.get('records')
-                if not records:
-                    break # No more records to fetch
+
+                if not records: # Break if no more records are returned
+                    break
+
                 all_records.extend([rec['fields'] for rec in records])
+                fetched_count += len(records) # Increment fetched count
                 offset += API_PAGE_SIZE
-                if offset >= data['total_count']: # Stop if all records fetched (or use a large limit if total_count is unreliable)
-                   break
+
+                if 'total_count' in data: # Use total_count from API if available, otherwise, use fallback limit
+                    total_count = min(data['total_count'], MAX_RECORDS_LIMIT) # Apply MAX_RECORDS_LIMIT as a cap
+                else:
+                    st.warning("Clé 'total_count' manquante dans la réponse de l'API. Utilisation d'une limite maximale de rappels.")
+
 
             except requests.exceptions.RequestException as e:
                 st.error(f"Erreur de requête API: {e}")
                 return pd.DataFrame() # Return empty DataFrame in case of error
+            except KeyError as e: # Catch potential KeyError for 'total_count' or 'records'
+                st.error(f"Erreur de structure JSON de l'API: clé manquante {e}")
+                return pd.DataFrame()
+
 
     if not all_records:
         return pd.DataFrame() # Return empty DataFrame if no records fetched
@@ -178,7 +192,7 @@ def display_metrics(data):
     col1, col2 = st.columns([3, 1])
 
     with col1:
-        st.metric("Total Recalls", len(data))
+        st.metric("Total Rappels", len(data))
 
     with col2:
         if st.button("🔄 Mettre à jour les données"):
