@@ -171,11 +171,10 @@ def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
     start_date, end_date = date_range
 
-    # Filter by date range
-    filtered_df = df[(df['date_de_publication'].dt.date >= start_date) & (df['date_de_publication'].dt.date <= end_date)]
-
-    # Filter by START_DATE
-    filtered_df = filtered_df[filtered_df['date_de_publication'].dt.date >= START_DATE]
+    # Filter by date range and START_DATE
+    filtered_df = df[
+        ((df['date_de_publication'].dt.date >= start_date) & (df['date_de_publication'].dt.date <= end_date)) & (df['date_de_publication'].dt.date >= START_DATE)
+    ]
 
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
@@ -412,11 +411,14 @@ def main():
 
         #Date range, ensure that date filtering does not break if there is no data.
         if not df.empty:
+            # Ensure date_de_publication is datetime64[ns] before applying .min() and .max()
+            df['date_de_publication'] = pd.to_datetime(df['date_de_publication'])
             min_date = df['date_de_publication'].min().to_pydatetime().date()
             max_date = df['date_de_publication'].max().to_pydatetime().date()
+
             selected_dates = st.slider("Sélectionnez la période",
                                        min_value=min_date, max_value=max_date,
-                                       value=(START_DATE, max_date))
+                                       value=(START_DATE if START_DATE > min_date else min_date, max_date))
         else:
             selected_dates = (START_DATE, datetime.now().date())
 
