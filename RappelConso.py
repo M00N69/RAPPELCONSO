@@ -30,7 +30,7 @@ st.markdown("""
             margin-right: 20px;
         }
 
-        /* Text styling within the recall container */
+        /* Text styling */
         .recall-content {
             flex-grow: 1;
         }
@@ -112,10 +112,22 @@ except KeyError:
 def load_data(url=DATA_URL):
     """Loads and preprocesses the recall data."""
     try:
+        st.write("Attempting to load data from:", url)  # Debugging message
+
         response = requests.get(url)
         response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+
+        st.write("API Response Status Code:", response.status_code)  # Debugging
+
         data = response.json()
+
+        if not data or 'records' not in data or not data['records']:  # Check for empty response
+            st.warning("API returned an empty dataset.")
+            return pd.DataFrame()
+
         df = pd.DataFrame([rec['fields'] for rec in data['records']])
+
+        st.write("DataFrame shape after initial load:", df.shape)  # Debugging
 
         # Convert date_de_publication to datetime using pd.to_datetime()
         df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
@@ -123,13 +135,20 @@ def load_data(url=DATA_URL):
         # Handle rows with invalid dates
         df = df.dropna(subset=['date_de_publication'])
 
+        st.write("DataFrame shape after dropping NaN dates:", df.shape)  # Debugging
+
         # Ensure that date filtering includes the current day's data
         df = df[df['date_de_publication'] >= START_DATE]
+
+        st.write("DataFrame shape after date filtering:", df.shape)  # Debugging
 
         # Sort the DataFrame by date in descending order (most recent first)
         df = df.sort_values(by='date_de_publication', ascending=False)
 
+        st.write("DataFrame shape after sorting:", df.shape)  # Debugging
+
         return df
+
     except requests.exceptions.RequestException as e:
         st.error(f"Erreur lors de la récupération des données depuis {url}: {e}")
         return pd.DataFrame()
@@ -259,14 +278,19 @@ def display_visualizations(data):
                 else:
                     st.write("Pas de données disponibles pour le graphique des décisions de rappel.")
 
-            data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
-            recalls_per_month = data.groupby('month').size().reset_index(name='counts')
-            fig_monthly_recalls = px.bar(recalls_per_month,
-                                         x='month', y='counts',
-                                         labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
-                                         title='Nombre de rappels par mois',
-                                         width=1200, height=400)
-            st.plotly_chart(fig_monthly_recalls, use_container_width=True)
+            # Ensure 'date_de_publication' exists before using it
+            if 'date_de_publication' in data.columns:
+                data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
+                recalls_per_month = data.groupby('month').size().reset_index(name='counts')
+                fig_monthly_recalls = px.bar(recalls_per_month,
+                                             x='month', y='counts',
+                                             labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
+                                             title='Nombre de rappels par mois',
+                                             width=1200, height=400)
+                st.plotly_chart(fig_monthly_recalls, use_container_width=True)
+            else:
+                st.warning("La colonne 'date_de_publication' n'est pas disponible. Le graphique des rappels par mois sera omis.")
+
         else:
             st.error("Insufficient data for one or more charts.")
     else:
