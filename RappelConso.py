@@ -109,18 +109,21 @@ def load_data():
     """Loads and preprocesses the recall data using the export endpoint."""
     response = requests.get(EXPORT_URL)
     if response.status_code == 200:
-        export_link = response.json().get('url')
-        if export_link:
-            csv_response = requests.get(export_link)
-            csv_data = csv_response.content.decode('utf-8')
-            df = pd.read_csv(pd.compat.StringIO(csv_data))
-            df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
-            df = df.dropna(subset=['date_de_publication'])
-            return df
-        else:
-            raise ValueError("Le lien d'exportation n'a pas été trouvé dans la réponse.")
+        try:
+            export_link = response.json().get('url')
+            if export_link:
+                csv_response = requests.get(export_link)
+                csv_data = csv_response.content.decode('utf-8')
+                df = pd.read_csv(pd.compat.StringIO(csv_data))
+                df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
+                df = df.dropna(subset=['date_de_publication'])
+                return df
+            else:
+                raise ValueError("Le lien d'exportation n'a pas été trouvé dans la réponse.")
+        except ValueError as e:
+            st.error(f"Erreur lors du traitement de la réponse JSON : {e}")
     else:
-        raise ValueError(f"Erreur lors de l'exportation du dataset : {response.status_code}")
+        st.error(f"Erreur lors de l'exportation du dataset : {response.status_code}")
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
