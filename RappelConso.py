@@ -97,8 +97,9 @@ st.markdown("""
 # --- Constants ---
 DATASET_ID = "rappelconso0"
 BASE_URL = "https://data.economie.gouv.fr/api/records/1.0/search/"
-START_DATE = datetime(2022, 1, 1).date()  # Date de début pour le filtre
-TODAY = datetime.now().date()  # Date actuelle
+START_DATE = datetime(2022, 1, 1).date()
+TODAY = datetime.now().date()
+CATEGORY_FILTER = 'Alimentation'  # Toujours filtrer par "Alimentation"
 
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
@@ -120,22 +121,19 @@ Vos réponses doivent être aussi claires et précises que possible, pour éclai
 
 @st.cache_data
 def load_data():
-    """Loads and preprocesses the recall data using the records endpoint with date filtering."""
+    """Loads and preprocesses the recall data using the records endpoint."""
     all_data = []
     offset = 0
-    limit = 10000  # Maximum limit for a single request (adjust based on API limits)
+    limit = 10000
 
     try:
         while True:
             params = {
                 "dataset": DATASET_ID,
-                "q": 'categorie_de_produit:"Alimentation"',  # Always filter by "Alimentation"
+                "q": f'categorie_de_produit:"{CATEGORY_FILTER}"', # Filtre obligatoire
                 "rows": limit,
                 "start": offset,
             }
-
-            # Encode special characters in the query parameter
-            params['q'] = quote(params['q'])
 
             response = requests.get(BASE_URL, params=params)
             response.raise_for_status()
@@ -147,7 +145,6 @@ def load_data():
             all_data.extend(data)
             offset += limit
 
-            # Add a break to prevent infinite loops if API does not handle offset correctly
             if offset > 50000:
                 st.warning("Nombre important de rappels. Les résultats peuvent être limités.")
                 break
@@ -160,9 +157,10 @@ def load_data():
         df = pd.DataFrame([rec['fields'] for rec in all_data])
         if 'date_de_publication' in df.columns:
             df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
-            # Filter by date range *after* loading data due to API limitations
+            df = df.dropna(subset=['date_de_publication'])  # Supprime les lignes avec date manquante
+
+            # Filtrage des dates après le chargement (si les dates sont valides)
             df = df[(df['date_de_publication'] >= START_DATE) & (df['date_de_publication'] <= TODAY)]
-            df = df.dropna(subset=['date_de_publication'])
         else:
             st.error("La colonne 'date_de_publication' n'existe pas dans les données.")
             return None
@@ -175,11 +173,9 @@ def load_data():
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
     if df is None or df.empty:
-        return pd.DataFrame()  # Retourne un DataFrame vide si df est None ou vide
+        return pd.DataFrame()
 
     start_date, end_date = date_range
-
-    # Filter by date range
     filtered_df = df[(df['date_de_publication'] >= start_date) & (df['date_de_publication'] <= end_date)]
 
     if subcategories:
@@ -220,7 +216,7 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
         return
 
     st.subheader("Derniers Rappels")
-    recent_recalls = data.sort_values(by='date_de_publication', ascending=False)  # Sort all recalls by date
+    recent_recalls = data.sort_values(by='date_de_publication', ascending=False)
     end_index = min(start_index + items_per_page, len(recent_recalls))
     current_recalls = recent_recalls.iloc[start_index:end_index]
 
@@ -239,7 +235,6 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
     col1, col2 = st.columns(2)
     for idx, row in current_recalls.iterrows():
         with col1 if idx % 2 == 0 else col2:
-            # Vérifie si les clés existent dans la ligne avant d'y accéder
             image_url = row.get('liens_vers_les_images', '')
             title = row.get('noms_des_modeles_ou_references', 'N/A')
             date = row.get('date_de_publication', None)
