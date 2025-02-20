@@ -325,7 +325,7 @@ def main():
 
         with st.sidebar.expander("Filtres avancés", expanded=False):
             # Sub-category and risks filters (none selected by default)
-            selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
+            selected_subcategories = st.multiselect("Souscatégories", options=all_subcategories, default=[])
             selected_risks = st.multiselect("Risques", options=all_risks, default=[])
 
             # Date range filter
