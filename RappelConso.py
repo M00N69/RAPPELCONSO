@@ -18,6 +18,26 @@ st.markdown("""
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             padding: 15px;
             margin-bottom: 20px;
+            diimport streamlit as st
+import pandas as pd
+import plotly.express as px
+import requests
+from datetime import datetime, date
+import google.generativeai as genai
+
+# Configuration de la page
+st.set_page_config(layout="wide")
+
+# Custom CSS for styling
+st.markdown("""
+    <style>
+        /* Container for each recall item */
+        .recall-container {
+            background-color: #f9f9f9;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            margin-bottom: 20px;
             display: flex;
             align-items: center;
         }
@@ -152,11 +172,6 @@ def load_data(url=DATA_URL):
         st.write("Minimum date in DataFrame:", df['date_de_publication'].min())  # Check date range
         st.write("Maximum date in DataFrame:", df['date_de_publication'].max())  # Check date range
 
-        # Ensure that date filtering includes the current day's data
-        df = df[df['date_de_publication'].dt.date >= START_DATE]  # Date filtering
-
-        st.write("DataFrame shape after date filtering:", df.shape)
-
         # Sort the DataFrame by date in descending order (most recent first)
         df = df.sort_values(by='date_de_publication', ascending=False)
 
@@ -178,6 +193,9 @@ def filter_data(df, subcategories, risks, search_term, date_range):
 
     # Filter by date range
     filtered_df = df[(df['date_de_publication'].dt.date >= start_date) & (df['date_de_publication'].dt.date <= end_date)]
+
+    # Filter by START_DATE
+    filtered_df = filtered_df[filtered_df['date_de_publication'].dt.date >= START_DATE]
 
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
