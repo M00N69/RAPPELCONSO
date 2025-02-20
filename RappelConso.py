@@ -106,27 +106,37 @@ Vos réponses doivent être aussi claires et précises que possible, pour éclai
 
 @st.cache_data
 def load_data():
-    """Loads and preprocesses the recall data using the exports endpoint."""
-    response = requests.get(EXPORT_URL)
-    if response.status_code == 200:
-        try:
-            export_link = response.json().get('url')
-            if export_link:
-                csv_response = requests.get(export_link)
-                csv_data = csv_response.content.decode('utf-8-sig')  # Use utf-8-sig to handle BOM
-                df = pd.read_csv(pd.compat.StringIO(csv_data))
-                df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
-                df = df.dropna(subset=['date_de_publication'])
-                return df
-            else:
-                st.error("Le lien d'exportation n'a pas été trouvé dans la réponse.")
-        except ValueError as e:
-            st.error(f"Erreur lors du traitement de la réponse JSON : {e}")
-        except Exception as e:
-            st.error(f"Erreur inattendue lors du traitement de la réponse : {e}")
+    """Loads and preprocesses the recall data using the records endpoint with pagination."""
+    all_data = []
+    offset = 0
+    limit = 10000  # Maximum limit for a single request
+
+    while True:
+        params = {
+            "select": "*",
+            "limit": limit,
+            "offset": offset,
+            "timezone": "UTC"
+        }
+        response = requests.get(EXPORT_URL, params=params)
+        if response.status_code == 200:
+            data = response.json().get('records', [])
+            if not data:
+                break
+            all_data.extend(data)
+            offset += limit
+        else:
+            st.error(f"Erreur lors du chargement des données : {response.status_code}")
+            return None
+
+    if all_data:
+        df = pd.DataFrame([rec['fields'] for rec in all_data])
+        df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
+        df = df.dropna(subset=['date_de_publication'])
+        return df
     else:
-        st.error(f"Erreur lors de l'exportation du dataset : {response.status_code}")
-    return None
+        st.error("Aucune donnée n'a été chargée.")
+        return None
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
@@ -321,7 +331,7 @@ def main():
 
         # --- Sidebar ---
         st.sidebar.title("Navigation & Filtres")
-        page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
+        page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Détails", "Chatbot"])
 
         with st.sidebar.expander("Filtres avancés", expanded=False):
             # Sub-category and risks filters (none selected by default)
@@ -363,7 +373,7 @@ def main():
             st.write("Cette page vous permet d'explorer différents aspects des rappels de produits à travers des graphiques interactifs.")
             display_visualizations(filtered_data)
 
-        elif page == "Details":
+        elif page == "Détails":
             st.header("Détails des rappels de produits")
             st.write("Consultez un tableau détaillé des rappels de produits ici, incluant toutes les informations disponibles.")
 
