@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import requests
 from datetime import datetime
+from urllib.parse import quote
 import google.generativeai as genai
 
 # Configuration de la page
@@ -79,12 +80,26 @@ st.markdown("""
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
+
+        /* Sidebar Logo Styling */
+        .sidebar-logo-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .sidebar-logo {
+            max-width: 150px;
+            height: auto;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 # --- Constants ---
 DATASET_ID = "rappelconso0"
-EXPORT_URL = f"https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation"
+BASE_URL = "https://data.economie.gouv.fr/api/records/1.0/search/"
+START_DATE = datetime(2022, 1, 1).date()
+TODAY = datetime.now().date()
+CATEGORY_FILTER = 'Alimentation'
 
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
@@ -106,33 +121,55 @@ Vos réponses doivent être aussi claires et précises que possible, pour éclai
 
 @st.cache_data
 def load_data():
-    """Loads and preprocesses the recall data using the records endpoint with pagination."""
+    """Loads and preprocesses the recall data using the records endpoint."""
     all_data = []
     offset = 0
-    limit = 10000  # Maximum limit for a single request
+    limit = 10000
 
-    while True:
-        params = {
-            "select": "*",
-            "limit": limit,
-            "offset": offset,
-            "timezone": "UTC"
-        }
-        response = requests.get(EXPORT_URL, params=params)
-        if response.status_code == 200:
+    try:
+        while True:
+            params = {
+                "dataset": DATASET_ID,
+                "q": f'categorie_de_produit:"{CATEGORY_FILTER}"',
+                "rows": limit,
+                "start": offset,
+            }
+
+            response = requests.get(BASE_URL, params=params)
+            response.raise_for_status()
+
             data = response.json().get('records', [])
             if not data:
                 break
+
             all_data.extend(data)
             offset += limit
-        else:
-            st.error(f"Erreur lors du chargement des données : {response.status_code}")
-            return None
+
+            if offset > 50000:
+                st.warning("Nombre important de rappels. Les résultats peuvent être limités.")
+                break
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erreur lors du chargement des données : {e}")
+        return None
 
     if all_data:
         df = pd.DataFrame([rec['fields'] for rec in all_data])
-        df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
-        df = df.dropna(subset=['date_de_publication'])
+        if 'date_de_publication' in df.columns:
+            df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
+
+            # Avant de filtrer, vérifiez si toutes les dates sont valides.
+            if df['date_de_publication'].isnull().any():
+                st.warning("Certaines dates de publication ne sont pas valides et seront supprimées.")
+                df = df.dropna(subset=['date_de_publication'])
+
+            # Filtrer par date après le chargement
+            df = df[(df['date_de_publication'] >= START_DATE) & (df['date_de_publication'] <= TODAY)]
+
+        else:
+            st.error("La colonne 'date_de_publication' n'existe pas dans les données.")
+            return None
+
         return df
     else:
         st.error("Aucune donnée n'a été chargée.")
@@ -140,9 +177,10 @@ def load_data():
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
-    start_date, end_date = date_range
+    if df is None or df.empty:
+        return pd.DataFrame()
 
-    # Filter by date range
+    start_date, end_date = date_range
     filtered_df = df[(df['date_de_publication'] >= start_date) & (df['date_de_publication'] <= end_date)]
 
     if subcategories:
@@ -155,12 +193,16 @@ def filter_data(df, subcategories, risks, search_term, date_range):
 
     return filtered_df
 
-# Ajoutez cette fonction pour vider le cache
 def clear_cache():
+    """Clears the Streamlit cache."""
     st.cache_data.clear()
 
 def display_metrics(data):
     """Displays key metrics about the recalls."""
+    if data is None:
+        st.warning("Les données ne sont pas disponibles pour afficher les métriques.")
+        return
+
     col1, col2 = st.columns([3, 1])
 
     with col1:
@@ -174,92 +216,106 @@ def display_metrics(data):
 
 def display_recent_recalls(data, start_index=0, items_per_page=10):
     """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
-    if not data.empty:
-        st.subheader("Derniers Rappels")
-        recent_recalls = data.sort_values(by='date_de_publication', ascending=False)  # Sort all recalls by date
-        end_index = min(start_index + items_per_page, len(recent_recalls))
-        current_recalls = recent_recalls.iloc[start_index:end_index]
+    if data is None or data.empty:
+        st.warning("Aucune donnée disponible pour l'affichage des rappels.")
+        return
 
-        # Pagination controls on a single line with buttons on the left and right
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col1:
-            if start_index > 0:
-                if st.button("Précédent", key="prev"):
-                    st.session_state.start_index -= items_per_page
-        with col3:
-            if end_index < len(recent_recalls):
-                if st.button("Suivant", key="next"):
-                    st.session_state.start_index += items_per_page
+    st.subheader("Derniers Rappels")
+    recent_recalls = data.sort_values(by='date_de_publication', ascending=False)
+    end_index = min(start_index + items_per_page, len(recent_recalls))
+    current_recalls = recent_recalls.iloc[start_index:end_index]
 
-        # Create two columns for displaying recall items
-        col1, col2 = st.columns(2)
-        for idx, row in current_recalls.iterrows():
-            with col1 if idx % 2 == 0 else col2:
-               st.markdown(f"""
-            <div class="recall-container">
-                <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
-                <div class="recall-content">
-                    <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
-                    <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
-                    <div class="recall-description">
-                        <strong>Marque:</strong> {row['nom_de_la_marque_du_produit']}<br>
-                        <strong>Motif du rappel:</strong> {row['motif_du_rappel']}
+    # Pagination controls on a single line with buttons on the left and right
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if start_index > 0:
+            if st.button("Précédent", key="prev"):
+                st.session_state.start_index -= items_per_page
+    with col3:
+        if end_index < len(recent_recalls):
+            if st.button("Suivant", key="next"):
+                st.session_state.start_index += items_per_page
+
+    # Create two columns for displaying recall items
+    col1, col2 = st.columns(2)
+    for idx, row in current_recalls.iterrows():
+        with col1 if idx % 2 == 0 else col2:
+            image_url = row.get('liens_vers_les_images', '')
+            title = row.get('noms_des_modeles_ou_references', 'N/A')
+            date = row.get('date_de_publication', None)
+            date_str = date.strftime('%d/%m/%Y') if date else 'N/A'
+            brand = row.get('nom_de_la_marque_du_produit', 'N/A')
+            reason = row.get('motif_du_rappel', 'N/A')
+            pdf_link = row.get('lien_vers_affichette_pdf', '')
+
+            st.markdown(f"""
+                <div class="recall-container">
+                    <img src="{image_url}" class="recall-image" alt="Product Image">
+                    <div class="recall-content">
+                        <div class="recall-title">{title}</div>
+                        <div class="recall-date">{date_str}</div>
+                        <div class="recall-description">
+                            <strong>Marque:</strong> {brand}<br>
+                            <strong>Motif du rappel:</strong> {reason}
+                        </div>
+                        <a href="{pdf_link}" target="_blank">Voir l'affichette</a>
                     </div>
-                    <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
                 </div>
-            </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.error("Aucune donnée disponible pour l'affichage des rappels.")
+            """, unsafe_allow_html=True)
 
 def display_visualizations(data):
     """Creates and displays the visualizations."""
-    if not data.empty:
-        value_counts = data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
-        significant_categories = value_counts[value_counts >= 2]
-        filtered_categories_data = data[data['sous_categorie_de_produit'].isin(significant_categories.index)]
+    if data is None or data.empty:
+        st.warning("Aucune donnée disponible pour les visualisations.")
+        return
 
-        legal_counts = data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
-        significant_legal = legal_counts[legal_counts >= 2]
-        filtered_legal_data = data[data['nature_juridique_du_rappel'].isin(significant_legal.index)]
+    value_counts = data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
+    significant_categories = value_counts[value_counts >= 2]
+    filtered_categories_data = data[data['sous_categorie_de_produit'].isin(significant_categories.index)]
 
-        if not filtered_categories_data.empty and not filtered_legal_data.empty:
-            col1, col2 = st.columns(2)
+    legal_counts = data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
+    significant_legal = legal_counts[legal_counts >= 2]
+    filtered_legal_data = data[data['nature_juridique_du_rappel'].isin(significant_legal.index)]
 
-            with col1:
-                fig_products = px.pie(filtered_categories_data,
-                                      names='sous_categorie_de_produit',
-                                      title='Sous-catégories',
-                                      color_discrete_sequence=px.colors.sequential.RdBu,
-                                      width=600,
-                                      height=400)
-                st.plotly_chart(fig_products, use_container_width=True)
+    if not filtered_categories_data.empty and not filtered_legal_data.empty:
+        col1, col2 = st.columns(2)
 
-            with col2:
-                fig_legal = px.pie(filtered_legal_data,
-                                   names='nature_juridique_du_rappel',
-                                   title='Décision de rappel',
-                                   color_discrete_sequence=px.colors.sequential.RdBu,
-                                   width=600,
-                                   height=400)
-                st.plotly_chart(fig_legal, use_container_width=True)
+        with col1:
+            fig_products = px.pie(filtered_categories_data,
+                                  names='sous_categorie_de_produit',
+                                  title='Sous-catégories',
+                                  color_discrete_sequence=px.colors.sequential.RdBu,
+                                  width=600,
+                                  height=400)
+            st.plotly_chart(fig_products, use_container_width=True)
 
-            # Add a bar chart showing the number of recalls per month
-            data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
-            recalls_per_month = data.groupby('month').size().reset_index(name='counts')
-            fig_monthly_recalls = px.bar(recalls_per_month,
-                                         x='month', y='counts',
-                                         labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
-                                         title='Nombre de rappels par mois',
-                                         width=1200, height=400)
-            st.plotly_chart(fig_monthly_recalls, use_container_width=True)
-        else:
-            st.error("Insufficient data for one or more charts.")
+        with col2:
+            fig_legal = px.pie(filtered_legal_data,
+                               names='nature_juridique_du_rappel',
+                               title='Décision de rappel',
+                               color_discrete_sequence=px.colors.sequential.RdBu,
+                               width=600,
+                               height=400)
+            st.plotly_chart(fig_legal, use_container_width=True)
+
+        # Add a bar chart showing the number of recalls per month
+        data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
+        recalls_per_month = data.groupby('month').size().reset_index(name='counts')
+        fig_monthly_recalls = px.bar(recalls_per_month,
+                                     x='month', y='counts',
+                                     labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
+                                     title='Nombre de rappels par mois',
+                                     width=1200, height=400)
+        st.plotly_chart(fig_monthly_recalls, use_container_width=True)
     else:
-        st.error("No data available for visualizations based on the selected filters.")
+        st.warning("Données insuffisantes pour afficher tous les graphiques. Ajustez les filtres ou choisissez une autre période.")
 
 def display_top_charts(data):
     """Displays top 5 subcategories and risks charts."""
+    if data is None or data.empty:
+        st.warning("Aucune donnée disponible pour les graphiques des top 5.")
+        return
+
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
@@ -284,36 +340,47 @@ def display_top_charts(data):
 
 def get_relevant_data_as_text(user_question, data):
     """Extracts and formats relevant data from the DataFrame as text."""
+    if data is None or data.empty:
+        return "Aucune donnée disponible pour répondre à cette question avec les filtres actuels."
+
     keywords = user_question.lower().split()
     selected_rows = data[data.apply(
         lambda row: any(keyword in str(val).lower() for keyword in keywords for val in row),
         axis=1
     )].head(3)  # Limit to 3 rows
 
-    context = "Relevant information from the RappelConso database:\n"
+    context = "Informations pertinentes de la base de données RappelConso:\n"
     for index, row in selected_rows.iterrows():
-        context += f"- Date of Publication: {row['date_de_publication'].strftime('%d/%m/%Y')}\n"
-        context += f"- Product Name: {row.get('noms_des_modeles_ou_references', 'N/A')}\n"
-        context += f"- Brand: {row.get('nom_de_la_marque_du_produit', 'N/A')}\n"
-        context += f"- Risks: {row.get('risques_encourus_par_le_consommateur', 'N/A')}\n"
-        context += f"- Category: {row.get('sous_categorie_de_produit', 'N/A')}\n"
+        context += f"- Date de Publication: {row['date_de_publication'].strftime('%d/%m/%Y')}\n"
+        context += f"- Nom du Produit: {row.get('noms_des_modeles_ou_references', 'N/A')}\n"
+        context += f"- Marque: {row.get('nom_de_la_marque_du_produit', 'N/A')}\n"
+        context += f"- Risques: {row.get('risques_encourus_par_le_consommateur', 'N/A')}\n"
+        context += f"- Catégorie: {row.get('sous_categorie_de_produit', 'N/A')}\n"
         context += "\n"
     return context
 
 def configure_model():
     """Creates and configures a GenerativeModel instance."""
-    return genai.GenerativeModel(
-        model_name="gemini-1.5-pro-latest",
-        system_instruction=system_instruction,
-    )
+    try:
+        return genai.GenerativeModel(
+            model_name="gemini-1.5-pro-latest",
+            generation_config=generation_config,
+            system_instruction=system_instruction,
+        )
+    except Exception as e:
+        st.error(f"Erreur lors de la configuration du modèle Gemini: {e}")
+        return None
+
 
 def detect_language(text):
+    """Detects if the input text is likely French or English based on keywords."""
     french_keywords = ["quels", "quelle", "comment", "pourquoi", "où", "qui", "quand", "le", "la", "les", "un", "une", "des"]
     if any(keyword in text.lower() for keyword in french_keywords):
         return "fr"
     return "en"
 
 def main():
+    """Main function to run the Streamlit app."""
     st.title("RappelConso - Chatbot & Dashboard")
 
     # Initialize session state for pagination
@@ -385,12 +452,16 @@ def main():
                                     file_name='details_rappels.csv',
                                     mime='text/csv')
             else:
-                st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
+                st.warning("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre période.")
 
         elif page == "Chatbot":
             st.header("Posez vos questions sur les rappels de produits")
 
             model = configure_model()  # Créez l'instance du modèle
+
+            if model is None:
+                st.error("Le modèle Gemini n'a pas pu être initialisé. Vérifiez votre clé API et la configuration du modèle.")
+                return
 
             if "chat_history" not in st.session_state:
                 st.session_state.chat_history = []
@@ -452,3 +523,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+            
