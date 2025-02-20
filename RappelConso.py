@@ -129,10 +129,14 @@ def load_data():
             st.error(f"Erreur lors du chargement des données : {response.status_code}")
             return None
 
-    df = pd.DataFrame([rec['fields'] for rec in all_data])
-    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
-    df = df.dropna(subset=['date_de_publication'])
-    return df
+    if all_data:
+        df = pd.DataFrame([rec['fields'] for rec in all_data])
+        df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
+        df = df.dropna(subset=['date_de_publication'])
+        return df
+    else:
+        st.error("Aucune donnée n'a été chargée.")
+        return None
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
