@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import requests
 from datetime import datetime
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 import google.generativeai as genai
 import json  # Importez le module json
 
@@ -134,15 +134,20 @@ def load_data():
             # Construire les paramètres séparément
             params = {
                 "dataset": DATASET_ID,
-                "q": f'categorie_de_produit:{CATEGORY_FILTER}',  # Suppression des guillemets
+                "q": f'categorie_de_produit:"{CATEGORY_FILTER}"',
                 "rows": limit,
                 "start": offset,
             }
 
-            # Afficher les parametres de la requete
-            st.write (f"Params de requete : {params}")
+            # Encoder les paramètres séparément, en spécifiant l'encodage UTF-8
+            encoded_params = urlencode(params, encoding='utf-8')
 
-            response = requests.get(BASE_URL, params=params)
+            # Afficher l'URL complète pour le débogage
+            url = f"{BASE_URL}?{encoded_params}"
+            st.write(f"URL de la requête : {url}")
+
+            # Faire la requête en spécifiant l'encodage UTF-8
+            response = requests.get(url, headers={'Accept-Charset': 'utf-8'})
             response.raise_for_status()
 
             # Vérifier si la réponse est du JSON valide
@@ -324,7 +329,7 @@ def display_visualizations(data):
                                      labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
                                      title='Nombre de rappels par mois',
                                      width=1200, height=400)
-            st.plotly_chart(fig_monthly_recalls, use_container_width=True)
+        st.plotly_chart(fig_monthly_recalls, use_container_width=True)
     else:
         st.warning("Données insuffisantes pour afficher tous les graphiques. Ajustez les filtres ou choisissez une autre période.")
 
@@ -496,7 +501,7 @@ def main():
                             language = detect_language(user_input)
 
                             # Extraire les données pertinentes des rappels filtrés
-                            relevant_data = get_relevant_data_as_text(user_input, filtered_data)
+                            relevant_data = get_relevant_data_as_text(user_question, filtered_data)
 
                             # Créer un contexte structuré pour le modèle
                             context = (
@@ -540,4 +545,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
