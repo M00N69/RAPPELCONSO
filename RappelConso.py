@@ -428,7 +428,7 @@ def main():
             """)
 
         # --- Page Content ---
-        filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
+        filtered_data = filter_data(df, selected_subcategories, risks, search_term, selected_dates)
 
         if page == "Page principale":
             display_metrics(filtered_data)
@@ -523,4 +523,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
