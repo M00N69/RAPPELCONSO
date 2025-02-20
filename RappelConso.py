@@ -9,7 +9,7 @@ import google.generativeai as genai
 st.set_page_config(layout="wide")
 
 # Custom CSS for styling
-st.markdown(r"""
+st.markdown("""
     <style>
         /* Container for each recall item */
         .recall-container {
@@ -21,7 +21,7 @@ st.markdown(r"""
             display: flex;
             align-items: center;
         }
-
+        
         /* Image styling */
         .recall-image {
             width: 120px;
@@ -29,8 +29,8 @@ st.markdown(r"""
             border-radius: 10px;
             margin-right: 20px;
         }
-
-        /* Text styling */
+        
+        /* Text styling within the recall container */
         .recall-content {
             flex-grow: 1;
         }
@@ -51,7 +51,7 @@ st.markdown(r"""
             font-size: 1em;
             color: #333;
         }
-
+        
         /* Pagination buttons */
         .pagination-container {
             display: flex;
@@ -83,8 +83,8 @@ st.markdown(r"""
 """, unsafe_allow_html=True)
 
 # --- Constants ---
-DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation"
-START_DATE = date(2022, 1, 1)
+DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000" # Removed row limit.  The filtering will handle the date limit
+START_DATE = date(2022, 1, 1)  # Define the start date for filtering
 
 # --- Gemini Pro API Settings ---
 try:
@@ -98,9 +98,9 @@ try:
         max_output_tokens=256,
     )
 
-    system_instruction = """Vous êtes un chatbot utile et informatif qui répond aux questions concernant les rappels de produits alimentaires en France, en utilisant la base de données RappelConso.
-    Concentrez-vous sur la fourniture d'informations concernant les dates de rappel, les produits, les marques, les risques et les catégories.
-    Évitez de faire des déclarations subjectives ou de donner des opinions. Basez vos réponses strictement sur les données fournies.
+    system_instruction = """Vous êtes un chatbot utile et informatif qui répond aux questions concernant les rappels de produits alimentaires en France, en utilisant la base de données RappelConso. 
+    Concentrez-vous sur la fourniture d'informations concernant les dates de rappel, les produits, les marques, les risques et les catégories. 
+    Évitez de faire des déclarations subjectives ou de donner des opinions. Basez vos réponses strictement sur les données fournies. 
     Vos réponses doivent être aussi claires et précises que possible, pour éclairer les utilisateurs sur les rappels en cours ou passés."""
 except KeyError:
     st.error("Clé API Gemini Pro manquante. Veuillez configurer la clé 'api_key' dans les secrets Streamlit.")
@@ -108,73 +108,32 @@ except KeyError:
 
 # --- Helper Functions ---
 
-@st.cache_data(show_spinner=True)
+@st.cache_data
 def load_data(url=DATA_URL):
     """Loads and preprocesses the recall data."""
-    try:
-        st.write("Attempting to load data from:", url)
+    response = requests.get(url)
+    data = response.json()
+    df = pd.DataFrame([rec['fields'] for rec in data['records']])
 
-        response = requests.get(url)
-        response.raise_for_status()
+    # Convert date_de_publication to datetime using pd.to_datetime()
+    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
 
-        st.write("API Response Status Code:", response.status_code)
+    # Handle rows with invalid dates
+    df = df.dropna(subset=['date_de_publication'])  # Remove rows with invalid dates
 
-        data = response.json()
+    # Filter data to include only dates from START_DATE to today
+    df = df[df['date_de_publication'] >= START_DATE]
 
-        if not data or 'records' not in data or not data['records']:
-            st.warning("API returned an empty dataset.")
-            return pd.DataFrame()
+    df = df.sort_values(by='date_de_publication', ascending=False)
 
-        st.write("First record from API:", data['records'][0]) # Examine the raw API data
-
-        df = pd.DataFrame([rec['fields'] for rec in data['records']])
-
-        st.write("DataFrame shape after initial load:", df.shape)
-
-        # Convert date_de_publication to datetime using pd.to_datetime()
-        # Try different date formats based on the API data
-        formats = ['%Y-%m-%d', '%d/%m/%Y', '%Y-%m-%dT%H:%M:%S%z', '%Y-%m-%dT%H:%M:%S.%f%z']
-        for fmt in formats:
-            try:
-                df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='raise', format=fmt)
-                break  # If successful, exit the loop
-            except ValueError:
-                continue  # If format fails, try the next one
-        else:
-            st.error(f"Unable to parse date_de_publication.  Tried formats: {formats}")
-            return pd.DataFrame()
-
-        # Handle rows with invalid dates
-        df = df.dropna(subset=['date_de_publication'])
-
-        st.write("DataFrame shape after dropping NaN dates:", df.shape)
-
-        st.write("Minimum date in DataFrame:", df['date_de_publication'].min())  # Check date range
-        st.write("Maximum date in DataFrame:", df['date_de_publication'].max())  # Check date range
-
-        # Sort the DataFrame by date in descending order (most recent first)
-        df = df.sort_values(by='date_de_publication', ascending=False)
-
-        st.write("DataFrame shape after sorting:", df.shape)
-
-        return df
-
-    except requests.exceptions.RequestException as e:
-        st.error(f"Erreur lors de la récupération des données depuis {url}: {e}")
-        return pd.DataFrame()
-    except (ValueError, KeyError) as e:
-        st.error(f"Erreur lors du traitement des données JSON: {e}")
-        return pd.DataFrame()
-
+    return df
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
     start_date, end_date = date_range
-
-    # Filter by date range and START_DATE
-    filtered_df = df[
-        ((df['date_de_publication'].dt.date >= start_date) & (df['date_de_publication'].dt.date <= end_date)) & (df['date_de_publication'].dt.date >= START_DATE)
-    ]
+    
+    # Filter by date range
+    filtered_df = df[(df['date_de_publication'] >= start_date) & (df['date_de_publication'] <= end_date)]
 
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
@@ -186,10 +145,9 @@ def filter_data(df, subcategories, risks, search_term, date_range):
 
     return filtered_df
 
-
+# Ajoutez cette fonction pour vider le cache
 def clear_cache():
     st.cache_data.clear()
-
 
 def display_metrics(data):
     """Displays key metrics about the recalls."""
@@ -201,6 +159,7 @@ def display_metrics(data):
     with col2:
         if st.button("🔄 Mettre à jour"):
             clear_cache()
+            # Modifier un état de session pour forcer le redémarrage
             st.session_state["restart_key"] = st.session_state.get("restart_key", 0) + 1
 
 
@@ -208,9 +167,11 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
     """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
     if not data.empty:
         st.subheader("Derniers Rappels")
+        #recent_recalls = data.sort_values(by='date_de_publication', ascending=False)  # Sort all recalls by date
         end_index = min(start_index + items_per_page, len(data))
         current_recalls = data.iloc[start_index:end_index]
 
+        # Pagination controls on a single line with buttons on the left and right
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
             if start_index > 0:
@@ -221,93 +182,73 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
                 if st.button("Suivant", key="next"):
                     st.session_state.start_index += items_per_page
 
+        # Create two columns for displaying recall items
         col1, col2 = st.columns(2)
         for idx, row in current_recalls.iterrows():
             with col1 if idx % 2 == 0 else col2:
-                st.markdown(f"""
-                <div class="recall-container">
-                    <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
-                    <div class="recall-content">
-                        <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
-                        <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
-                        <div class="recall-description">
-                            <strong>Marque:</strong> {row['nom_de_la_marque_du_produit']}<br>
-                            <strong>Motif du rappel:</strong> {row['motif_du_rappel']}
-                        </div>
-                        <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
+               st.markdown(f"""
+            <div class="recall-container">
+                <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
+                <div class="recall-content">
+                    <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
+                    <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
+                    <div class="recall-description">
+                        <strong>Marque:</strong> {row['nom_de_la_marque_du_produit']}<br>
+                        <strong>Motif du rappel:</strong> {row['motif_du_rappel']}
                     </div>
+                    <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
                 </div>
-                """, unsafe_allow_html=True)
+            </div>
+        """, unsafe_allow_html=True)
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
-
+        
 def display_visualizations(data):
     """Creates and displays the visualizations."""
     if not data.empty:
-        # Check if 'sous_categorie_de_produit' column exists
-        if 'sous_categorie_de_produit' in data.columns:
-            value_counts = data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
-            significant_categories = value_counts[value_counts >= 2]
-            filtered_categories_data = data[data['sous_categorie_de_produit'].isin(significant_categories.index)]
-        else:
-            st.warning("La colonne 'sous_categorie_de_produit' n'est pas disponible. Le premier graphique sera omis.")
-            filtered_categories_data = pd.DataFrame()  # Create an empty DataFrame
+        value_counts = data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
+        significant_categories = value_counts[value_counts >= 2]
+        filtered_categories_data = data[data['sous_categorie_de_produit'].isin(significant_categories.index)]
 
-        # Check if 'nature_juridique_du_rappel' column exists
-        if 'nature_juridique_du_rappel' in data.columns:
-            legal_counts = data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
-            significant_legal = legal_counts[legal_counts >= 2]
-            filtered_legal_data = data[data['nature_juridique_du_rappel'].isin(significant_legal.index)]
-        else:
-            st.warning("La colonne 'nature_juridique_du_rappel' n'est pas disponible. Le deuxième graphique sera omis.")
-            filtered_legal_data = pd.DataFrame()  # Create an empty DataFrame
+        legal_counts = data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
+        significant_legal = legal_counts[legal_counts >= 2]
+        filtered_legal_data = data[data['nature_juridique_du_rappel'].isin(significant_legal.index)]
 
         if not filtered_categories_data.empty and not filtered_legal_data.empty:
             col1, col2 = st.columns(2)
 
             with col1:
-                if not filtered_categories_data.empty:
-                    fig_products = px.pie(filtered_categories_data,
-                                          names='sous_categorie_de_produit',
-                                          title='Sous-catégories',
-                                          color_discrete_sequence=px.colors.sequential.RdBu,
-                                          width=600,
-                                          height=400)
-                    st.plotly_chart(fig_products, use_container_width=True)
-                else:
-                    st.write("Pas de données disponibles pour le graphique des sous-catégories.")
+                fig_products = px.pie(filtered_categories_data,
+                                      names='sous_categorie_de_produit',
+                                      title='Sous-catégories',
+                                      color_discrete_sequence=px.colors.sequential.RdBu,
+                                      width=600,
+                                      height=400)
+                st.plotly_chart(fig_products, use_container_width=True)
 
             with col2:
-                if not filtered_legal_data.empty:
-                    fig_legal = px.pie(filtered_legal_data,
-                                       names='nature_juridique_du_rappel',
-                                       title='Décision de rappel',
-                                       color_discrete_sequence=px.colors.sequential.RdBu,
-                                       width=600,
-                                       height=400)
-                    st.plotly_chart(fig_legal, use_container_width=True)
-                else:
-                    st.write("Pas de données disponibles pour le graphique des décisions de rappel.")
+                fig_legal = px.pie(filtered_legal_data,
+                                   names='nature_juridique_du_rappel',
+                                   title='Décision de rappel',
+                                   color_discrete_sequence=px.colors.sequential.RdBu,
+                                   width=600,
+                                   height=400)
+                st.plotly_chart(fig_legal, use_container_width=True)
 
-            # Ensure 'date_de_publication' exists before using it
-            if 'date_de_publication' in data.columns:
-                data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
-                recalls_per_month = data.groupby('month').size().reset_index(name='counts')
-                fig_monthly_recalls = px.bar(recalls_per_month,
-                                             x='month', y='counts',
-                                             labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
-                                             title='Nombre de rappels par mois',
-                                             width=1200, height=400)
-                st.plotly_chart(fig_monthly_recalls, use_container_width=True)
-            else:
-                st.warning("La colonne 'date_de_publication' n'est pas disponible. Le graphique des rappels par mois sera omis.")
-
+            # Add a bar chart showing the number of recalls per month
+            data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
+            recalls_per_month = data.groupby('month').size().reset_index(name='counts')
+            fig_monthly_recalls = px.bar(recalls_per_month,
+                                         x='month', y='counts',
+                                         labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
+                                         title='Nombre de rappels par mois',
+                                         width=1200, height=400)
+            st.plotly_chart(fig_monthly_recalls, use_container_width=True)
         else:
             st.error("Insufficient data for one or more charts.")
     else:
         st.error("No data available for visualizations based on the selected filters.")
-
 
 def display_top_charts(data):
     """Displays top 5 subcategories and risks charts."""
@@ -315,38 +256,23 @@ def display_top_charts(data):
 
     col1, col2 = st.columns(2)
 
-    # Check if DataFrame is empty
-    if data.empty:
-        st.warning("Aucune donnée disponible pour afficher les graphiques Top 5.")
-        st.markdown("</div>", unsafe_allow_html=True)  # Close the div
-        return  # Exit the function early
+    with col1:
+        top_subcategories = data['sous_categorie_de_produit'].value_counts().head(5)
+        fig_top_subcategories = px.bar(x=top_subcategories.index,
+                                       y=top_subcategories.values,
+                                       labels={'x': 'Sous-catégories', 'y': 'Nombre de rappels'},
+                                       title='Top 5 des sous-catégories')
+        st.plotly_chart(fig_top_subcategories, use_container_width=True)
 
-    # Check if 'sous_categorie_de_produit' column exists
-    if 'sous_categorie_de_produit' in data.columns:
-        with col1:
-            top_subcategories = data['sous_categorie_de_produit'].value_counts().head(5)
-            fig_top_subcategories = px.bar(x=top_subcategories.index,
-                                           y=top_subcategories.values,
-                                           labels={'x': 'Sous-catégories', 'y': 'Nombre de rappels'},
-                                           title='Top 5 des sous-catégories')
-            st.plotly_chart(fig_top_subcategories, use_container_width=True)
-    else:
-        st.warning("La colonne 'sous_categorie_de_produit' n'est pas disponible. Le graphique des sous-catégories Top 5 sera omis.")
-
-    # Check if 'risques_encourus_par_le_consommateur' column exists
-    if 'risques_encourus_par_le_consommateur' in data.columns:
-        with col2:
-            top_risks = data['risques_encourus_par_le_consommateur'].value_counts().head(5)
-            fig_top_risks = px.bar(x=top_risks.index,
-                                   y=top_risks.values,
-                                   labels={'x': 'Risques', 'y': 'Nombre de rappels'},
-                                   title='Top 5 des risques')
-            st.plotly_chart(fig_top_risks, use_container_width=True)
-    else:
-        st.warning("La colonne 'risques_encourus_par_le_consommateur' n'est pas disponible. Le graphique des risques Top 5 sera omis.")
+    with col2:
+        top_risks = data['risques_encourus_par_le_consommateur'].value_counts().head(5)
+        fig_top_risks = px.bar(x=top_risks.index,
+                               y=top_risks.values,
+                               labels={'x': 'Risques', 'y': 'Nombre de rappels'},
+                               title='Top 5 des risques')
+        st.plotly_chart(fig_top_risks, use_container_width=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
-
 
 def get_relevant_data_as_text(user_question, data):
     """Extracts and formats relevant data from the DataFrame as text."""
@@ -354,7 +280,7 @@ def get_relevant_data_as_text(user_question, data):
     selected_rows = data[data.apply(
         lambda row: any(keyword in str(val).lower() for keyword in keywords for val in row),
         axis=1
-    )].head(3)
+    )].head(3)  # Limit to 3 rows
 
     context = "Relevant information from the RappelConso database:\n"
     for index, row in selected_rows.iterrows():
@@ -366,18 +292,12 @@ def get_relevant_data_as_text(user_question, data):
         context += "\n"
     return context
 
-
 def configure_model():
     """Creates and configures a GenerativeModel instance."""
-    if genai:
-        return genai.GenerativeModel(
-            model_name="gemini-1.5-pro-latest",
-            system_instruction=system_instruction,
-        )
-    else:
-        st.warning("Le chatbot est désactivé car la clé API Gemini Pro est manquante.")
-        return None
-
+    return genai.GenerativeModel(
+        model_name="gemini-1.5-pro-latest",
+        system_instruction=system_instruction,
+    )
 
 def detect_language(text):
     french_keywords = ["quels", "quelle", "comment", "pourquoi", "où", "qui", "quand", "le", "la", "les", "un", "une", "des"]
@@ -385,45 +305,40 @@ def detect_language(text):
         return "fr"
     return "en"
 
-
 def main():
     st.title("RappelConso - Chatbot & Dashboard")
 
+    # Initialize session state for pagination
     if 'start_index' not in st.session_state:
         st.session_state.start_index = 0
 
+    # Load data
     df = load_data()
 
-    #Added this to check if the dataframe has data.
-    if not df.empty:
-        all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
-        all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
-    else:
-        all_subcategories = []
-        all_risks = []
+    # Extract unique values for subcategories and risks
+    all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
+    all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
 
+    # --- Sidebar ---
     st.sidebar.title("Navigation & Filtres")
     page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
 
     with st.sidebar.expander("Filtres avancés", expanded=False):
+        # Sub-category and risks filters (none selected by default)
         selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
+        
+        # Date range filter
+        min_date = df['date_de_publication'].min()
+        max_date = df['date_de_publication'].max()
+        selected_dates = st.slider("Sélectionnez la période",
+                                   min_value=min_date, max_value=max_date,
+                                   value=(min_date, max_date))
 
-        #Date range, ensure that date filtering does not break if there is no data.
-        if not df.empty:
-            # Ensure date_de_publication is datetime64[ns] before applying .min() and .max()
-            df['date_de_publication'] = pd.to_datetime(df['date_de_publication'])
-            min_date = df['date_de_publication'].min().to_pydatetime().date()
-            max_date = df['date_de_publication'].max().to_pydatetime().date()
-
-            selected_dates = st.slider("Sélectionnez la période",
-                                       min_value=min_date, max_value=max_date,
-                                       value=(START_DATE if START_DATE > min_date else min_date, max_date))
-        else:
-            selected_dates = (START_DATE, datetime.now().date())
-
+    # --- Search Bar ---
     search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
 
+    # --- Instructions Expander ---
     with st.expander("Instructions d'utilisation"):
         st.markdown("""
         ### Instructions d'utilisation
@@ -435,15 +350,12 @@ def main():
         - **Chatbot** : Posez vos questions concernant les rappels de produits et obtenez des réponses basées sur les données les plus récentes.
         """)
 
-    #Filter only if the dataframe is not empty
-    if not df.empty:
-        filtered_data = filter_data(df, selected_subcategories, risks = selected_risks, search_term=search_term, date_range=selected_dates)
-    else:
-        filtered_data = pd.DataFrame()
+    # --- Page Content ---
+    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
 
     if page == "Page principale":
         display_metrics(filtered_data)
-        display_top_charts(filtered_data)
+        display_top_charts(filtered_data)  # Display top 5 charts for categories and risks
         display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
 
     elif page == "Visualisation":
@@ -468,47 +380,54 @@ def main():
     elif page == "Chatbot":
         st.header("Posez vos questions sur les rappels de produits")
 
-        model = configure_model()
+        model = configure_model()  # Créez l'instance du modèle
 
-        if model:
-            if "chat_history" not in st.session_state:
-                st.session_state.chat_history = []
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
 
-            user_input = st.text_area("Votre question:", height=150)
+        user_input = st.text_area("Votre question:", height=150)
 
-            if st.button("Envoyer"):
-                if user_input.strip() == "":
-                    st.warning("Veuillez entrer une question valide.")
-                else:
-                    with st.spinner('Gemini Pro réfléchit...'):
-                        try:
-                            language = detect_language(user_input)
+        if st.button("Envoyer"):
+            if user_input.strip() == "":
+                st.warning("Veuillez entrer une question valide.")
+            else:
+                with st.spinner('Gemini Pro réfléchit...'):
+                    try:
+                        # Détecter la langue de l'entrée utilisateur
+                        language = detect_language(user_input)
 
-                            relevant_data = get_relevant_data_as_text(user_input, filtered_data)
+                        # Extraire les données pertinentes des rappels filtrés
+                        relevant_data = get_relevant_data_as_text(user_input, filtered_data)
+                        
+                        # Créer un contexte structuré pour le modèle
+                        context = (
+                            "Informations sur les rappels filtrés :\n\n" +
+                            relevant_data +
+                            "\n\nQuestion de l'utilisateur : " + user_input
+                        )
 
-                            context = (
-                                "Informations sur les rappels filtrés :\n\n" +
-                                relevant_data +
-                                "\n\nQuestion de l'utilisateur : " + user_input
-                            )
+                        # Démarrer une session de chat ou continuer la session existante
+                        convo = model.start_chat(history=st.session_state.chat_history)
 
-                            convo = model.start_chat(history=st.session_state.chat_history)
+                        # Envoyer le contexte structuré et la question
+                        response = convo.send_message(context)
+                        
+                        # Mettre à jour l'historique du chat
+                        st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
+                        st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
 
-                            response = convo.send_message(context)
+                        # Afficher l'historique du chat avec une mise en forme améliorée
+                        for message in st.session_state.chat_history:
+                            role = message["role"]
+                            content = message["parts"][0]
+                            if role == "user":
+                                st.markdown(f"**Vous :** {content}")
+                            else:
+                                st.markdown(f"**Assistant :** {content}")
+                    except Exception as e:
+                        st.error(f"Une erreur s'est produite: {e}")
 
-                            st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
-                            st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
-
-                            for message in st.session_state.chat_history:
-                                role = message["role"]
-                                content = message["parts"][0]
-                                if role == "user":
-                                    st.markdown(f"**Vous :** {content}")
-                                else:
-                                    st.markdown(f"**Assistant :** {content}")
-                        except Exception as e:
-                            st.error(f"Une erreur s'est produite: {e}")
-
+# --- Logo and Link in Sidebar ---
     st.sidebar.markdown(
         f"""
         <div class="sidebar-logo-container">
@@ -522,3 +441,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
