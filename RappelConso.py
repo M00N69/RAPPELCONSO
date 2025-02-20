@@ -113,7 +113,7 @@ except KeyError:
 
 @st.cache_data(show_spinner=True) # Show spinner during data loading
 def load_data(url, start_date=START_DATE):
-    """Loads and preprocesses the recall data from API with date filtering."""
+    """Loads and preprocesses the recall data from API with date filtering from START_DATE onwards."""
     all_records = []
     offset = 0
     total_count = MAX_RECORDS_LIMIT # Fallback in case total_count is not in API response
@@ -123,10 +123,10 @@ def load_data(url, start_date=START_DATE):
     start_date_str = start_date.strftime('%Y-%m-%d') # Format date for API query
     today_str = date.today().strftime('%Y-%m-%d')
 
-    # Construct base URL with date filter
-    base_url_with_date_filter = f"{url}&refine.date_de_publication>{start_date_str}&refine.date_de_publication<{today_str}&rows={API_PAGE_SIZE}"
+    # Construct base URL with date filter to load data from START_DATE to today
+    base_url_with_date_filter = f"{url}&refine.date_de_publication>={start_date_str}&refine.date_de_publication<={today_str}&rows={API_PAGE_SIZE}" # Changed to >= and <= to include start and end dates
 
-    with st.spinner("Chargement initial des données..."): # Initial loading spinner
+    with st.spinner("Chargement initial des données (depuis 2022)..."): # Updated spinner message
         while fetched_count < total_count: # Use fetched_count and fallback total_count to control loop
             request_url = f"{base_url_with_date_filter}&offset={offset}"
             try:
@@ -171,10 +171,15 @@ def load_data(url, start_date=START_DATE):
     return df
 
 
-def filter_data(df, subcategories, risks, search_term): # Date range filtering is now done by API
+def filter_data(df, subcategories, risks, search_term, date_range): # Added date_range parameter
     """Filters the data based on user selections and search term."""
 
     filtered_df = df.copy() # Start with a copy to avoid modifying original DataFrame
+    start_date, end_date = date_range # Unpack date range from slider
+
+    # Apply date range filter from slider
+    filtered_df = filtered_df[(filtered_df['date_de_publication'] >= start_date) & (filtered_df['date_de_publication'] <= end_date)]
+
 
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
@@ -351,7 +356,7 @@ def main():
     if 'start_index' not in st.session_state:
         st.session_state.start_index = 0
 
-    # Load data using API filtering for date
+    # Load data using API filtering for date, starting from 2022-01-01
     df = load_data(BASE_DATA_URL, START_DATE)
 
     if df.empty: # Stop if initial data load fails
@@ -370,6 +375,15 @@ def main():
         selected_subcategories = st.multiselect("Sous-catégories", options=all_subcategories, default=[])
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
 
+        # Date range filter - RE-ADDED SLIDER HERE
+        min_date = START_DATE # Minimum date is fixed to START_DATE
+        max_date = date.today() # Maximum date is today
+        default_dates = (START_DATE, max_date) # Default range from START_DATE to today
+        selected_dates = st.slider("Sélectionnez la période",
+                                   min_value=min_date, max_value=max_date,
+                                   value=default_dates) # Set default value
+
+
     # --- Search Bar ---
     search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
 
@@ -378,7 +392,7 @@ def main():
         st.markdown("""
         ### Instructions d'utilisation
 
-        - **Filtres Avancés** : Utilisez les filtres pour affiner votre recherche par sous-catégories et risques. La période est pré-filtrée à partir de 2022.
+        - **Filtres Avancés** : Utilisez les filtres pour affiner votre recherche par sous-catégories, risques et période de temps. La période par défaut est fixée du 01/01/2022 à aujourd'hui.
         - **Nombre Total de Rappels** : Un indicateur du nombre total de rappels correspondant aux critères sélectionnés.
         - **Graphiques Top 5** : Deux graphiques affichent les 5 sous-catégories de produits les plus rappelées et les 5 principaux risques.
         - **Liste des Derniers Rappels** : Une liste paginée des rappels les plus récents, incluant le nom du produit, la date de rappel, la marque, le motif du rappel, et un lien pour voir l'affichette du rappel.
@@ -387,7 +401,7 @@ def main():
         """)
 
     # --- Page Content ---
-    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term) # Date filtering done on load
+    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates) # Pass selected_dates to filter_data
 
     if page == "Page principale":
         display_metrics(filtered_data)
@@ -468,4 +482,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
