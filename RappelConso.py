@@ -119,13 +119,14 @@ def load_data():
                 df = df.dropna(subset=['date_de_publication'])
                 return df
             else:
-                raise ValueError("Le lien d'exportation n'a pas été trouvé dans la réponse.")
+                st.error("Le lien d'exportation n'a pas été trouvé dans la réponse.")
         except ValueError as e:
             st.error(f"Erreur lors du traitement de la réponse JSON : {e}")
         except Exception as e:
             st.error(f"Erreur inattendue lors du traitement de la réponse : {e}")
     else:
         st.error(f"Erreur lors de l'exportation du dataset : {response.status_code}")
+    return None
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
