@@ -3,8 +3,8 @@ import pandas as pd
 import plotly.express as px
 import requests
 from datetime import datetime
-from urllib.parse import quote  # Importez quote pour l'encodage d'URL
-import json  # Importez le module json
+from urllib.parse import quote
+import json
 import google.generativeai as genai
 
 # Configuration de la page
@@ -118,7 +118,7 @@ Vos réponses doivent être aussi claires et précises que possible, pour éclai
 # --- Helper Functions ---
 
 @st.cache_data
-def load_data():
+def load_data(category_filter=None):
     """Loads and preprocesses the recall data using the records endpoint."""
     all_data = []
     offset = 0
@@ -128,27 +128,28 @@ def load_data():
         while True:
             params = {
                 "dataset": DATASET_ID,
-                "q": 'categorie_de_produit:"Alimentation"',  # Enclosing the value with quotes
                 "rows": limit,
                 "start": offset
             }
 
-            # Encode special characters in the query parameter
-            params['q'] = quote(params['q'])
+            if category_filter:
+                # Encodage de la requête ODSQL
+                where = f'sous_categorie_de_produit = "{category_filter}"'  # Remplacez par le bon champ et la bonne valeur
+                params["where"] = where
 
             response = requests.get(BASE_URL, params=params)
             # Affiche le code de statut HTTP
             st.write(f"Code de statut HTTP : {response.status_code}")
-            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            response.raise_for_status()
 
             try:
-                data = response.json()  # Décode la réponse JSON
+                data = response.json()
                 # Affiche le JSON brut (pour debug)
                 st.write("Réponse JSON brute :")
                 st.json(data)
             except json.JSONDecodeError as e:
                 st.error(f"Erreur lors du décodage JSON : {e}")
-                st.error(f"Contenu de la réponse (non JSON) : {response.text}")  # Affiche le contenu brut en cas d'erreur JSON
+                st.error(f"Contenu de la réponse (non JSON) : {response.text}")
                 return None
 
             records = data.get('records', [])
@@ -166,7 +167,7 @@ def load_data():
     except requests.exceptions.RequestException as e:
         st.error(f"Erreur lors du chargement des données : {e}")
         return None
-    except Exception as e: # Capture les autres exceptions
+    except Exception as e:
         st.error(f"Une erreur inattendue s'est produite : {e}")
         return None
 
@@ -399,7 +400,13 @@ def main():
         st.session_state.start_index = 0
 
     # Load data
-    df = load_data()
+    # Ajout d'un selectbox pour choisir la catégorie
+    category_filter = st.selectbox(
+        "Sélectionnez une catégorie de produit :",
+        options=[None, "Plats préparés", "Biscuits et gâteaux", "Produits laitiers"]  # Remplacez par les bonnes valeurs
+    )
+
+    df = load_data(category_filter=category_filter)  # Passe le filtre à load_data()
 
     # Check if data was loaded successfully
     if df is not None:
