@@ -412,11 +412,11 @@ def main():
 
         #Date range, ensure that date filtering does not break if there is no data.
         if not df.empty:
-            min_date = df['date_de_publication'].min()
-            max_date = df['date_de_publication'].max()
+            min_date = df['date_de_publication'].min().to_pydatetime().date()
+            max_date = df['date_de_publication'].max().to_pydatetime().date()
             selected_dates = st.slider("Sélectionnez la période",
                                        min_value=min_date, max_value=max_date,
-                                       value=(min_date, max_date))
+                                       value=(START_DATE, max_date))
         else:
             selected_dates = (START_DATE, datetime.now().date())
 
@@ -520,5 +520,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
-    
