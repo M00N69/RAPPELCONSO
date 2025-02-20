@@ -98,6 +98,7 @@ st.markdown("""
 # --- Constants ---
 DATASET_ID = "rappelconso0"
 BASE_URL = "https://data.economie.gouv.fr/api/records/1.0/search/"  # URL de base, sans les paramètres
+CATEGORY_FILTER = "Plats préparés"  # Définir la catégorie ici
 
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
@@ -118,7 +119,7 @@ Vos réponses doivent être aussi claires et précises que possible, pour éclai
 # --- Helper Functions ---
 
 @st.cache_data
-def load_data(category_filter=None):
+def load_data():
     """Loads and preprocesses the recall data using the records endpoint."""
     all_data = []
     offset = 0
@@ -132,29 +133,16 @@ def load_data(category_filter=None):
                 "start": offset
             }
 
-            if category_filter:
-                # Encodage de la requête ODSQL
-                where = f'sous_categorie_de_produit = "{category_filter}"'  # Remplacez par le bon champ et la bonne valeur
-                params["where"] = where
+            # Ajout du filtre de catégorie
+            where = f'categorie_de_produit = "{CATEGORY_FILTER}"'
+            params["where"] = where
 
             response = requests.get(BASE_URL, params=params)
-            # Affiche le code de statut HTTP
-            st.write(f"Code de statut HTTP : {response.status_code}")
             response.raise_for_status()
 
-            try:
-                data = response.json()
-                # Affiche le JSON brut (pour debug)
-                st.write("Réponse JSON brute :")
-                st.json(data)
-            except json.JSONDecodeError as e:
-                st.error(f"Erreur lors du décodage JSON : {e}")
-                st.error(f"Contenu de la réponse (non JSON) : {response.text}")
-                return None
-
+            data = response.json()
             records = data.get('records', [])
             if not records:
-                st.info("Aucun enregistrement trouvé dans la réponse API.")
                 break
 
             all_data.extend(records)
@@ -400,13 +388,7 @@ def main():
         st.session_state.start_index = 0
 
     # Load data
-    # Ajout d'un selectbox pour choisir la catégorie
-    category_filter = st.selectbox(
-        "Sélectionnez une catégorie de produit :",
-        options=[None, "Plats préparés", "Biscuits et gâteaux", "Produits laitiers"]  # Remplacez par les bonnes valeurs
-    )
-
-    df = load_data(category_filter=category_filter)  # Passe le filtre à load_data()
+    df = load_data()
 
     # Check if data was loaded successfully
     if df is not None:
