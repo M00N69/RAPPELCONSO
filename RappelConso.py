@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import requests
 from datetime import datetime
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode
 import google.generativeai as genai
 import json  # Importez le module json
 
@@ -43,6 +43,7 @@ st.markdown("""
             margin-bottom: 5px;
         }
 
+        /* Recall date styling */
         .recall-date {
             color: #555;
             font-size: 0.9em;
@@ -131,19 +132,14 @@ def load_data():
     try:
         while True:
             # Construire les paramètres séparément
-
-            # Utilisez quote pour encoder la requête
-            query = f'categorie_de_produit:"{CATEGORY_FILTER}"'
-            encoded_query = quote(query)
-
             params = {
                 "dataset": DATASET_ID,
-                "q": encoded_query,
+                "q": f'categorie_de_produit:{CATEGORY_FILTER}',  # Suppression des guillemets
                 "rows": limit,
                 "start": offset,
             }
 
-            #Afficher les parametres de la requete
+            # Afficher les parametres de la requete
             st.write (f"Params de requete : {params}")
 
             response = requests.get(BASE_URL, params=params)
@@ -328,7 +324,7 @@ def display_visualizations(data):
                                      labels={'month': 'Mois', 'counts': 'Nombre de rappels'},
                                      title='Nombre de rappels par mois',
                                      width=1200, height=400)
-        st.plotly_chart(fig_monthly_recalls, use_container_width=True)
+            st.plotly_chart(fig_monthly_recalls, use_container_width=True)
     else:
         st.warning("Données insuffisantes pour afficher tous les graphiques. Ajustez les filtres ou choisissez une autre période.")
 
@@ -544,3 +540,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+            
