@@ -4,6 +4,7 @@ import plotly.express as px
 import requests
 from datetime import datetime
 import google.generativeai as genai
+from urllib.parse import quote  # Importez quote pour l'encodage d'URL
 
 # Configuration de la page
 st.set_page_config(layout="wide")
@@ -95,7 +96,7 @@ st.markdown("""
 
 # --- Constants ---
 DATASET_ID = "rappelconso0"
-EXPORT_URL = f"https://data.economie.gouv.fr/api/records/1.0/search/?dataset={DATASET_ID}&q=categorie_de_produit:Alimentation&rows=10000"
+BASE_URL = "https://data.economie.gouv.fr/api/records/1.0/search/"  # URL de base, sans les paramètres
 
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
@@ -120,27 +121,34 @@ def load_data():
     """Loads and preprocesses the recall data using the records endpoint."""
     all_data = []
     offset = 0
-    limit = 10000  # Maximum limit for a single request
+    limit = 1000  # Limit rows to avoid timeouts
 
     try:
         while True:
             params = {
                 "dataset": DATASET_ID,
-                "q": "categorie_de_produit:Alimentation",
+                "q": 'categorie_de_produit:"Alimentation"',  # Enclosing the value with quotes
                 "rows": limit,
                 "start": offset
             }
-            response = requests.get(EXPORT_URL.split("?")[0], params=params)  # Utilise l'URL sans paramètres
-            response.raise_for_status()  # Lève une exception pour les codes d'erreur HTTP
+
+            # Encode special characters in the query parameter
+            params['q'] = quote(params['q'])
+
+            response = requests.get(BASE_URL, params=params)
+            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
 
             data = response.json().get('records', [])
             if not data:
                 break
+
             all_data.extend(data)
             offset += limit
-            if offset > 50000:  # Limite pour éviter les requêtes trop longues
+
+            if offset > 5000:  # Limiting the offset to prevent very long requests
                 st.warning("Nombre important de rappels. Les résultats peuvent être limités.")
                 break
+
     except requests.exceptions.RequestException as e:
         st.error(f"Erreur lors du chargement des données : {e}")
         return None
