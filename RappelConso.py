@@ -84,7 +84,7 @@ st.markdown("""
 
 # --- Constants ---
 DATASET_ID = "rappelconso0"
-EXPORT_URL = f"https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/{DATASET_ID}/exports/csv"
+EXPORT_URL = f"https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
 
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
