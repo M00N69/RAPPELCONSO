@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import requests
 from datetime import datetime
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 import google.generativeai as genai
 import json  # Importez le module json
 
@@ -49,6 +49,7 @@ st.markdown("""
             margin-bottom: 10px;
         }
 
+        /* Recall description styling */
         .recall-description {
             font-size: 1em;
             color: #333;
@@ -130,22 +131,22 @@ def load_data():
     try:
         while True:
             # Construire les paramètres séparément
+
+            # Utilisez quote pour encoder la requête
+            query = f'categorie_de_produit:"{CATEGORY_FILTER}"'
+            encoded_query = quote(query)
+
             params = {
                 "dataset": DATASET_ID,
-                "q": f'categorie_de_produit:"{CATEGORY_FILTER}"',
+                "q": encoded_query,
                 "rows": limit,
                 "start": offset,
             }
 
-            # Encoder les paramètres séparément, en spécifiant l'encodage UTF-8
-            encoded_params = urlencode(params, encoding='utf-8')
+            #Afficher les parametres de la requete
+            st.write (f"Params de requete : {params}")
 
-            # Afficher l'URL complète pour le débogage
-            url = f"{BASE_URL}?{encoded_params}"
-            st.write(f"URL de la requête : {url}")
-
-            # Faire la requête en spécifiant l'encodage UTF-8
-            response = requests.get(url, headers={'Accept-Charset': 'utf-8'})
+            response = requests.get(BASE_URL, params=params)
             response.raise_for_status()
 
             # Vérifier si la réponse est du JSON valide
