@@ -83,49 +83,64 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Constants ---
-DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000" # Removed row limit.  The filtering will handle the date limit
-START_DATE = date(2022, 1, 1)  # Define the start date for filtering
+DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation"
+START_DATE = date(2022, 1, 1)
 
 # --- Gemini Pro API Settings ---
-api_key = st.secrets["api_key"]
-genai.configure(api_key=api_key)
+try:
+    api_key = st.secrets["api_key"]
+    genai.configure(api_key=api_key)
 
-generation_config = genai.GenerationConfig(
-    temperature=0.2,
-    top_p=0.4,
-    top_k=32,
-    max_output_tokens=256,
-)
+    generation_config = genai.GenerationConfig(
+        temperature=0.2,
+        top_p=0.4,
+        top_k=32,
+        max_output_tokens=256,
+    )
 
-system_instruction = """Vous êtes un chatbot utile et informatif qui répond aux questions concernant les rappels de produits alimentaires en France, en utilisant la base de données RappelConso. 
-Concentrez-vous sur la fourniture d'informations concernant les dates de rappel, les produits, les marques, les risques et les catégories. 
-Évitez de faire des déclarations subjectives ou de donner des opinions. Basez vos réponses strictement sur les données fournies. 
-Vos réponses doivent être aussi claires et précises que possible, pour éclairer les utilisateurs sur les rappels en cours ou passés."""
+    system_instruction = """Vous êtes un chatbot utile et informatif qui répond aux questions concernant les rappels de produits alimentaires en France, en utilisant la base de données RappelConso. 
+    Concentrez-vous sur la fourniture d'informations concernant les dates de rappel, les produits, les marques, les risques et les catégories. 
+    Évitez de faire des déclarations subjectives ou de donner des opinions. Basez vos réponses strictement sur les données fournies. 
+    Vos réponses doivent être aussi claires et précises que possible, pour éclairer les utilisateurs sur les rappels en cours ou passés."""
+except KeyError:
+    st.error("Clé API Gemini Pro manquante. Veuillez configurer la clé 'api_key' dans les secrets Streamlit.")
+    genai = None  # Désactiver les fonctionnalités du chatbot si la clé API est manquante
 
 # --- Helper Functions ---
 
-@st.cache_data
+@st.cache_data(show_spinner=True)
 def load_data(url=DATA_URL):
     """Loads and preprocesses the recall data."""
-    response = requests.get(url)
-    data = response.json()
-    df = pd.DataFrame([rec['fields'] for rec in data['records']])
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+        data = response.json()
+        df = pd.DataFrame([rec['fields'] for rec in data['records']])
 
-    # Convert date_de_publication to datetime using pd.to_datetime()
-    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
+        # Convert date_de_publication to datetime using pd.to_datetime()
+        df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
 
-    # Handle rows with invalid dates
-    df = df.dropna(subset=['date_de_publication'])  # Remove rows with invalid dates
+        # Handle rows with invalid dates
+        df = df.dropna(subset=['date_de_publication'])
 
-    # Filter data to include only dates from START_DATE to today
-    df = df[df['date_de_publication'] >= START_DATE]
+        # Ensure that date filtering includes the current day's data
+        df = df[df['date_de_publication'] >= START_DATE]
 
-    return df
+        # Sort the DataFrame by date in descending order (most recent first)
+        df = df.sort_values(by='date_de_publication', ascending=False)
+
+        return df
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erreur lors de la récupération des données depuis {url}: {e}")
+        return pd.DataFrame()  # Retourner un DataFrame vide en cas d'erreur
+    except (ValueError, KeyError) as e:
+        st.error(f"Erreur lors du traitement des données JSON: {e}")
+        return pd.DataFrame()
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
     start_date, end_date = date_range
-    
+
     # Filter by date range
     filtered_df = df[(df['date_de_publication'] >= start_date) & (df['date_de_publication'] <= end_date)]
 
@@ -139,7 +154,6 @@ def filter_data(df, subcategories, risks, search_term, date_range):
 
     return filtered_df
 
-# Ajoutez cette fonction pour vider le cache
 def clear_cache():
     st.cache_data.clear()
 
@@ -153,51 +167,45 @@ def display_metrics(data):
     with col2:
         if st.button("🔄 Mettre à jour"):
             clear_cache()
-            # Modifier un état de session pour forcer le redémarrage
             st.session_state["restart_key"] = st.session_state.get("restart_key", 0) + 1
-
 
 def display_recent_recalls(data, start_index=0, items_per_page=10):
     """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
     if not data.empty:
         st.subheader("Derniers Rappels")
-        recent_recalls = data.sort_values(by='date_de_publication', ascending=False)  # Sort all recalls by date
-        end_index = min(start_index + items_per_page, len(recent_recalls))
-        current_recalls = recent_recalls.iloc[start_index:end_index]
+        end_index = min(start_index + items_per_page, len(data))
+        current_recalls = data.iloc[start_index:end_index]
 
-        # Pagination controls on a single line with buttons on the left and right
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
             if start_index > 0:
                 if st.button("Précédent", key="prev"):
                     st.session_state.start_index -= items_per_page
         with col3:
-            if end_index < len(recent_recalls):
+            if end_index < len(data):
                 if st.button("Suivant", key="next"):
                     st.session_state.start_index += items_per_page
 
-        # Create two columns for displaying recall items
         col1, col2 = st.columns(2)
         for idx, row in current_recalls.iterrows():
             with col1 if idx % 2 == 0 else col2:
-               st.markdown(f"""
-            <div class="recall-container">
-                <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
-                <div class="recall-content">
-                    <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
-                    <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
-                    <div class="recall-description">
-                        <strong>Marque:</strong> {row['nom_de_la_marque_du_produit']}<br>
-                        <strong>Motif du rappel:</strong> {row['motif_du_rappel']}
+                st.markdown(f"""
+                <div class="recall-container">
+                    <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image">
+                    <div class="recall-content">
+                        <div class="recall-title">{row['noms_des_modeles_ou_references']}</div>
+                        <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y')}</div>
+                        <div class="recall-description">
+                            <strong>Marque:</strong> {row['nom_de_la_marque_du_produit']}<br>
+                            <strong>Motif du rappel:</strong> {row['motif_du_rappel']}
+                        </div>
+                        <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
                     </div>
-                    <a href="{row['lien_vers_affichette_pdf']}" target="_blank">Voir l'affichette</a>
                 </div>
-            </div>
-        """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
-        
 def display_visualizations(data):
     """Creates and displays the visualizations."""
     if not data.empty:
@@ -230,7 +238,6 @@ def display_visualizations(data):
                                    height=400)
                 st.plotly_chart(fig_legal, use_container_width=True)
 
-            # Add a bar chart showing the number of recalls per month
             data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
             recalls_per_month = data.groupby('month').size().reset_index(name='counts')
             fig_monthly_recalls = px.bar(recalls_per_month,
@@ -274,7 +281,7 @@ def get_relevant_data_as_text(user_question, data):
     selected_rows = data[data.apply(
         lambda row: any(keyword in str(val).lower() for keyword in keywords for val in row),
         axis=1
-    )].head(3)  # Limit to 3 rows
+    )].head(3)
 
     context = "Relevant information from the RappelConso database:\n"
     for index, row in selected_rows.iterrows():
@@ -288,10 +295,14 @@ def get_relevant_data_as_text(user_question, data):
 
 def configure_model():
     """Creates and configures a GenerativeModel instance."""
-    return genai.GenerativeModel(
-        model_name="gemini-1.5-pro-latest",
-        system_instruction=system_instruction,
-    )
+    if genai:  # Vérifier si genai est initialisé
+        return genai.GenerativeModel(
+            model_name="gemini-1.5-pro-latest",
+            system_instruction=system_instruction,
+        )
+    else:
+        st.warning("Le chatbot est désactivé car la clé API Gemini Pro est manquante.")
+        return None
 
 def detect_language(text):
     french_keywords = ["quels", "quelle", "comment", "pourquoi", "où", "qui", "quand", "le", "la", "les", "un", "une", "des"]
@@ -302,37 +313,36 @@ def detect_language(text):
 def main():
     st.title("RappelConso - Chatbot & Dashboard")
 
-    # Initialize session state for pagination
     if 'start_index' not in st.session_state:
         st.session_state.start_index = 0
 
-    # Load data
     df = load_data()
 
-    # Extract unique values for subcategories and risks
-    all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
-    all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
+    if not df.empty:
+        all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
+        all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
+    else:
+        all_subcategories = []
+        all_risks = []
 
-    # --- Sidebar ---
     st.sidebar.title("Navigation & Filtres")
     page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
 
     with st.sidebar.expander("Filtres avancés", expanded=False):
-        # Sub-category and risks filters (none selected by default)
         selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
-        
-        # Date range filter
-        min_date = df['date_de_publication'].min()
-        max_date = df['date_de_publication'].max()
-        selected_dates = st.slider("Sélectionnez la période",
-                                   min_value=min_date, max_value=max_date,
-                                   value=(min_date, max_date))
 
-    # --- Search Bar ---
+        if not df.empty:
+            min_date = df['date_de_publication'].min()
+            max_date = df['date_de_publication'].max()
+            selected_dates = st.slider("Sélectionnez la période",
+                                       min_value=min_date, max_value=max_date,
+                                       value=(min_date, max_date))
+        else:
+            selected_dates = (START_DATE, datetime.now().date())
+
     search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
 
-    # --- Instructions Expander ---
     with st.expander("Instructions d'utilisation"):
         st.markdown("""
         ### Instructions d'utilisation
@@ -344,12 +354,14 @@ def main():
         - **Chatbot** : Posez vos questions concernant les rappels de produits et obtenez des réponses basées sur les données les plus récentes.
         """)
 
-    # --- Page Content ---
-    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
+    if not df.empty:
+        filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
+    else:
+        filtered_data = pd.DataFrame()
 
     if page == "Page principale":
         display_metrics(filtered_data)
-        display_top_charts(filtered_data)  # Display top 5 charts for categories and risks
+        display_top_charts(filtered_data)
         display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
 
     elif page == "Visualisation":
@@ -374,54 +386,47 @@ def main():
     elif page == "Chatbot":
         st.header("Posez vos questions sur les rappels de produits")
 
-        model = configure_model()  # Créez l'instance du modèle
+        model = configure_model()
 
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
+        if model: # Vérifier si le modèle est initialisé
+            if "chat_history" not in st.session_state:
+                st.session_state.chat_history = []
 
-        user_input = st.text_area("Votre question:", height=150)
+            user_input = st.text_area("Votre question:", height=150)
 
-        if st.button("Envoyer"):
-            if user_input.strip() == "":
-                st.warning("Veuillez entrer une question valide.")
-            else:
-                with st.spinner('Gemini Pro réfléchit...'):
-                    try:
-                        # Détecter la langue de l'entrée utilisateur
-                        language = detect_language(user_input)
+            if st.button("Envoyer"):
+                if user_input.strip() == "":
+                    st.warning("Veuillez entrer une question valide.")
+                else:
+                    with st.spinner('Gemini Pro réfléchit...'):
+                        try:
+                            language = detect_language(user_input)
 
-                        # Extraire les données pertinentes des rappels filtrés
-                        relevant_data = get_relevant_data_as_text(user_input, filtered_data)
-                        
-                        # Créer un contexte structuré pour le modèle
-                        context = (
-                            "Informations sur les rappels filtrés :\n\n" +
-                            relevant_data +
-                            "\n\nQuestion de l'utilisateur : " + user_input
-                        )
+                            relevant_data = get_relevant_data_as_text(user_input, filtered_data)
 
-                        # Démarrer une session de chat ou continuer la session existante
-                        convo = model.start_chat(history=st.session_state.chat_history)
+                            context = (
+                                "Informations sur les rappels filtrés :\n\n" +
+                                relevant_data +
+                                "\n\nQuestion de l'utilisateur : " + user_input
+                            )
 
-                        # Envoyer le contexte structuré et la question
-                        response = convo.send_message(context)
-                        
-                        # Mettre à jour l'historique du chat
-                        st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
-                        st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
+                            convo = model.start_chat(history=st.session_state.chat_history)
 
-                        # Afficher l'historique du chat avec une mise en forme améliorée
-                        for message in st.session_state.chat_history:
-                            role = message["role"]
-                            content = message["parts"][0]
-                            if role == "user":
-                                st.markdown(f"**Vous :** {content}")
-                            else:
-                                st.markdown(f"**Assistant :** {content}")
-                    except Exception as e:
-                        st.error(f"Une erreur s'est produite: {e}")
+                            response = convo.send_message(context)
 
-# --- Logo and Link in Sidebar ---
+                            st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
+                            st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
+
+                            for message in st.session_state.chat_history:
+                                role = message["role"]
+                                content = message["parts"][0]
+                                if role == "user":
+                                    st.markdown(f"**Vous :** {content}")
+                                else:
+                                    st.markdown(f"**Assistant :** {content}")
+                        except Exception as e:
+                            st.error(f"Une erreur s'est produite: {e}")
+
     st.sidebar.markdown(
         f"""
         <div class="sidebar-logo-container">
@@ -432,7 +437,5 @@ def main():
         """, unsafe_allow_html=True
     )
 
-
 if __name__ == "__main__":
     main()
-    
