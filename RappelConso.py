@@ -113,7 +113,7 @@ def load_data():
             export_link = response.json().get('url')
             if export_link:
                 csv_response = requests.get(export_link)
-                csv_data = csv_response.content.decode('utf-8')
+                csv_data = csv_response.content.decode('utf-8-sig')  # Use utf-8-sig to handle BOM
                 df = pd.read_csv(pd.compat.StringIO(csv_data))
                 df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
                 df = df.dropna(subset=['date_de_publication'])
