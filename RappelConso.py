@@ -99,7 +99,7 @@ st.markdown("""
 
 # --- Constants ---
 DATASET_ID = "rappelconso0"
-BASE_URL = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/rappelconso0/records" #CORRECTIF ICI
+BASE_URL = "https://data.economie.gouv.fr/api/records/1.0/search/" # Retour à l'URL de base d'origine
 START_DATE = datetime(2022, 1, 1).date()
 TODAY = datetime.now().date()
 CATEGORY_FILTER = 'Alimentation'
@@ -134,15 +134,15 @@ def load_data():
             # Construire les paramètres séparément
             params = {
                 "dataset": DATASET_ID,
-                "limit": limit,
+                "rows": limit,
                 "start": offset,
-                "refine": f'categorie_de_produit:"{CATEGORY_FILTER}"',  # Utiliser 'refine'
+                "where": f'categorie_de_produit = "{CATEGORY_FILTER}"'  # Utiliser 'where'
             }
 
             # Afficher les parametres de la requete
             st.write (f"Params de requete : {params}")
 
-            response = requests.get(BASE_URL, params=params) # CORRECTIF ICI, laissons faire request
+            response = requests.get(BASE_URL, params=params)
             response.raise_for_status()
 
             # Vérifier si la réponse est du JSON valide
@@ -153,7 +153,7 @@ def load_data():
                 st.error(f"Contenu de la réponse : {response.text}")
                 return None
 
-            records = data.get('results', []) # Etant donné l'usage de la nouvelle URL, records -> results
+            records = data.get('records', [])
             if not records:
                 st.info("Aucun enregistrement trouvé dans la réponse API.")
                 break
@@ -173,7 +173,7 @@ def load_data():
         return None
 
     if all_data:
-        df = pd.DataFrame(all_data) # Les données sont déjà dans all_data
+        df = pd.DataFrame([rec['fields'] for rec in all_data])
         if 'date_de_publication' in df.columns:
             df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
 
@@ -209,7 +209,7 @@ def filter_data(df, subcategories, risks, search_term, date_range):
     if search_term:
         filtered_df = filtered_df[filtered_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
 
-    return filtered_df
+    return filtered_data
 
 def clear_cache():
     """Clears the Streamlit cache."""
