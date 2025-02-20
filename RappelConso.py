@@ -212,7 +212,7 @@ def display_metrics(data):
     col1, col2 = st.columns([3, 1])
 
     with col1:
-        st.metric("Total Rappels", len(data))
+        st.metric("Total Rappels", len(data) if not data.empty else 0) # Handle empty data for metrics
 
     with col2:
         if st.button("🔄 Mettre à jour les données"):
@@ -310,23 +310,33 @@ def display_top_charts(data):
     """Displays top 5 subcategories and risks charts."""
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
 
+    if data.empty: # Check if data is empty at the start
+        st.warning("Aucune donnée disponible pour afficher les graphiques Top 5.")
+        return  # Exit function if no data
+
     col1, col2 = st.columns(2)
 
     with col1:
         top_subcategories = data['sous_categorie_de_produit'].value_counts().head(5)
-        fig_top_subcategories = px.bar(x=top_subcategories.index,
-                                       y=top_subcategories.values,
-                                       labels={'x': 'Sous-catégories', 'y': 'Nombre de rappels'},
-                                       title='Top 5 des Sous-catégories les plus Rappelées')
-        st.plotly_chart(fig_top_subcategories, use_container_width=True)
+        if not top_subcategories.empty: # Check if series is empty before charting
+            fig_top_subcategories = px.bar(x=top_subcategories.index,
+                                           y=top_subcategories.values,
+                                           labels={'x': 'Sous-catégories', 'y': 'Nombre de rappels'},
+                                           title='Top 5 des Sous-catégories les plus Rappelées')
+            st.plotly_chart(fig_top_subcategories, use_container_width=True)
+        else:
+            st.info("Pas assez de données de sous-catégories pour afficher le graphique Top 5.") # Informative message
 
     with col2:
         top_risks = data['risques_encourus_par_le_consommateur'].value_counts().head(5)
-        fig_top_risks = px.bar(x=top_risks.index,
-                               y=top_risks.values,
-                               labels={'x': 'Risques', 'y': 'Nombre de rappels'},
-                               title='Top 5 des Risques les plus Fréquents')
-        st.plotly_chart(fig_top_risks, use_container_width=True)
+        if not top_risks.empty: # Check if series is empty before charting
+            fig_top_risks = px.bar(x=top_risks.index,
+                                   y=top_risks.values,
+                                   labels={'x': 'Risques', 'y': 'Nombre de rappels'},
+                                   title='Top 5 des Risques les plus Fréquents')
+            st.plotly_chart(fig_top_risks, use_container_width=True)
+        else:
+            st.info("Pas assez de données de risques pour afficher le graphique Top 5.") # Informative message
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -372,8 +382,9 @@ def main():
     # Load data using API filtering for date, starting from 2022-01-01
     df = load_data(BASE_DATA_URL, START_DATE)
 
-    if df.empty: # Stop if initial data load fails
-        st.stop()
+    if df.empty: # Stop if initial data load fails - HANDLE EMPTY DATAFRAME HERE
+        st.error("Impossible de charger les données de rappels depuis l'API. Veuillez vérifier la console pour plus de détails. L'API RappelConso est peut-être inaccessible ou ne retourne pas de données pour la période spécifiée.")
+        st.stop() # Stop further execution
 
     # Extract unique values for subcategories and risks
     all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
