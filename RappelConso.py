@@ -143,7 +143,7 @@ def load_data():
             url = f"{BASE_URL}?{encoded_params}"
             st.write(f"URL de la requête : {url}")
 
-            response = requests.get(BASE_URL, url=url)  # Utiliser l'URL complète
+            response = requests.get(url)  # Utiliser l'URL complète comme premier argument
             response.raise_for_status()
 
             data = response.json().get('records', [])
@@ -531,4 +531,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-            
