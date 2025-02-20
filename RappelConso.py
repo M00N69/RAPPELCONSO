@@ -88,6 +88,7 @@ BASE_DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=r
 START_DATE = date(2022, 1, 1)  # Define the start date for filtering
 API_PAGE_SIZE = 100 # Define page size for API requests
 MAX_RECORDS_LIMIT = 10000 # Fallback limit in case total_count is missing or unreliable
+API_TIMEOUT_SEC = 30 # Timeout for API requests
 
 # --- Gemini Pro API Settings ---
 try:
@@ -129,18 +130,22 @@ def load_data(url, start_date=START_DATE):
     with st.spinner("Chargement initial des données (depuis 2022)..."): # Updated spinner message
         while fetched_count < total_count: # Use fetched_count and fallback total_count to control loop
             request_url = f"{base_url_with_date_filter}&offset={offset}"
+            print(f"Requesting URL: {request_url}") # Debug: Print URL
             try:
-                response = requests.get(request_url)
+                response = requests.get(request_url, timeout=API_TIMEOUT_SEC) # Added timeout
                 response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
                 data = response.json()
                 records = data.get('records')
 
                 if not records: # Break if no more records are returned
+                    print("No more records from API.") # Debug
                     break
 
                 all_records.extend([rec['fields'] for rec in records])
                 fetched_count += len(records) # Increment fetched count
                 offset += API_PAGE_SIZE
+
+                print(f"Fetched {len(records)} records. Total fetched: {fetched_count}, Offset: {offset}") # Debug: Record counts
 
                 if 'total_count' in data: # Use total_count from API if available, otherwise, use fallback limit
                     total_count = min(data['total_count'], MAX_RECORDS_LIMIT) # Apply MAX_RECORDS_LIMIT as a cap
@@ -151,16 +156,24 @@ def load_data(url, start_date=START_DATE):
 
             except requests.exceptions.RequestException as e:
                 st.error(f"Erreur de requête API: {e}")
+                print(f"API Request Error: {e}") # Debug: Print error details
                 return pd.DataFrame() # Return empty DataFrame in case of error
             except KeyError as e: # Catch potential KeyError for 'total_count' or 'records'
                 st.error(f"Erreur de structure JSON de l'API: clé manquante {e}")
+                print(f"JSON Structure Error: Missing key {e}") # Debug: JSON error
+                return pd.DataFrame()
+            except requests.exceptions.Timeout:
+                st.error(f"Délai d'attente dépassé lors de la requête à l'API. L'API RappelConso est peut-être lente ou inaccessible. Veuillez réessayer plus tard.")
+                print("API Timeout Error") # Debug: Timeout
                 return pd.DataFrame()
 
 
     if not all_records:
+        print("No records loaded in total.") # Debug: No data at all
         return pd.DataFrame() # Return empty DataFrame if no records fetched
 
     df = pd.DataFrame(all_records)
+    print(f"DataFrame created with {len(df)} rows.") # Debug: DataFrame size
 
     # Convert date_de_publication to datetime objects (already strings from API)
     df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
@@ -482,3 +495,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
