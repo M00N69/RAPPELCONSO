@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import requests
 from datetime import datetime
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 import google.generativeai as genai
 
 # Configuration de la page
@@ -128,18 +128,22 @@ def load_data():
 
     try:
         while True:
+            # Construire les paramètres séparément
             params = {
                 "dataset": DATASET_ID,
-                "q": f'categorie_de_produit:"{CATEGORY_FILTER}"',  # Utilisez f-string
+                "q": f'categorie_de_produit:"{CATEGORY_FILTER}"',
                 "rows": limit,
                 "start": offset,
             }
 
+            # Encoder les paramètres AVANT de faire la requête
+            encoded_params = urlencode(params)
+
             # Afficher l'URL complète pour le débogage
-            url = f"{BASE_URL}?{urlencode(params)}"
+            url = f"{BASE_URL}?{encoded_params}"
             st.write(f"URL de la requête : {url}")
 
-            response = requests.get(BASE_URL, params=params)
+            response = requests.get(BASE_URL, url=url)  # Utiliser l'URL complète
             response.raise_for_status()
 
             data = response.json().get('records', [])
