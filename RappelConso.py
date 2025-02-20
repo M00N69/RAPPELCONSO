@@ -21,7 +21,7 @@ st.markdown("""
             display: flex;
             align-items: center;
         }
-        
+
         /* Image styling */
         .recall-image {
             width: 120px;
@@ -29,7 +29,7 @@ st.markdown("""
             border-radius: 10px;
             margin-right: 20px;
         }
-        
+
         /* Text styling within the recall container */
         .recall-content {
             flex-grow: 1;
@@ -51,7 +51,7 @@ st.markdown("""
             font-size: 1em;
             color: #333;
         }
-        
+
         /* Pagination buttons */
         .pagination-container {
             display: flex;
@@ -83,7 +83,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Constants ---
-DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation&rows=10000"
+DATASET_ID = "rappelconso0"
+EXPORT_URL = f"https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/{DATASET_ID}/exports/csv"
 
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
@@ -96,32 +97,35 @@ generation_config = genai.GenerationConfig(
     max_output_tokens=256,
 )
 
-system_instruction = """Vous êtes un chatbot utile et informatif qui répond aux questions concernant les rappels de produits alimentaires en France, en utilisant la base de données RappelConso. 
-Concentrez-vous sur la fourniture d'informations concernant les dates de rappel, les produits, les marques, les risques et les catégories. 
-Évitez de faire des déclarations subjectives ou de donner des opinions. Basez vos réponses strictement sur les données fournies. 
+system_instruction = """Vous êtes un chatbot utile et informatif qui répond aux questions concernant les rappels de produits alimentaires en France, en utilisant la base de données RappelConso.
+Concentrez-vous sur la fourniture d'informations concernant les dates de rappel, les produits, les marques, les risques et les catégories.
+Évitez de faire des déclarations subjectives ou de donner des opinions. Basez vos réponses strictement sur les données fournies.
 Vos réponses doivent être aussi claires et précises que possible, pour éclairer les utilisateurs sur les rappels en cours ou passés."""
 
 # --- Helper Functions ---
 
 @st.cache_data
-def load_data(url=DATA_URL):
-    """Loads and preprocesses the recall data."""
-    response = requests.get(url)
-    data = response.json()
-    df = pd.DataFrame([rec['fields'] for rec in data['records']])
-
-    # Convert date_de_publication to datetime using pd.to_datetime()
-    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
-
-    # Handle rows with invalid dates
-    df = df.dropna(subset=['date_de_publication'])  # Remove rows with invalid dates
-
-    return df
+def load_data():
+    """Loads and preprocesses the recall data using the export endpoint."""
+    response = requests.get(EXPORT_URL)
+    if response.status_code == 200:
+        export_link = response.json().get('url')
+        if export_link:
+            csv_response = requests.get(export_link)
+            csv_data = csv_response.content.decode('utf-8')
+            df = pd.read_csv(pd.compat.StringIO(csv_data))
+            df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
+            df = df.dropna(subset=['date_de_publication'])
+            return df
+        else:
+            raise ValueError("Le lien d'exportation n'a pas été trouvé dans la réponse.")
+    else:
+        raise ValueError(f"Erreur lors de l'exportation du dataset : {response.status_code}")
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
     start_date, end_date = date_range
-    
+
     # Filter by date range
     filtered_df = df[(df['date_de_publication'] >= start_date) & (df['date_de_publication'] <= end_date)]
 
@@ -151,7 +155,6 @@ def display_metrics(data):
             clear_cache()
             # Modifier un état de session pour forcer le redémarrage
             st.session_state["restart_key"] = st.session_state.get("restart_key", 0) + 1
-
 
 def display_recent_recalls(data, start_index=0, items_per_page=10):
     """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
@@ -193,7 +196,6 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
 
-        
 def display_visualizations(data):
     """Creates and displays the visualizations."""
     if not data.empty:
@@ -317,7 +319,7 @@ def main():
         # Sub-category and risks filters (none selected by default)
         selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
-        
+
         # Date range filter
         min_date = df['date_de_publication'].min()
         max_date = df['date_de_publication'].max()
@@ -388,7 +390,7 @@ def main():
 
                         # Extraire les données pertinentes des rappels filtrés
                         relevant_data = get_relevant_data_as_text(user_input, filtered_data)
-                        
+
                         # Créer un contexte structuré pour le modèle
                         context = (
                             "Informations sur les rappels filtrés :\n\n" +
@@ -401,7 +403,7 @@ def main():
 
                         # Envoyer le contexte structuré et la question
                         response = convo.send_message(context)
-                        
+
                         # Mettre à jour l'historique du chat
                         st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
                         st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
@@ -417,7 +419,7 @@ def main():
                     except Exception as e:
                         st.error(f"Une erreur s'est produite: {e}")
 
-# --- Logo and Link in Sidebar ---
+    # --- Logo and Link in Sidebar ---
     st.sidebar.markdown(
         f"""
         <div class="sidebar-logo-container">
@@ -428,7 +430,5 @@ def main():
         """, unsafe_allow_html=True
     )
 
-
 if __name__ == "__main__":
     main()
-
