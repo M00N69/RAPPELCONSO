@@ -118,6 +118,7 @@ def load_data(url, start_date=START_DATE):
     offset = 0
     total_count = MAX_RECORDS_LIMIT # Fallback in case total_count is not in API response
     fetched_count = 0 # Track fetched records to prevent infinite loop if total_count is missing/wrong
+    total_count_warning_displayed = False # Flag to track if warning has been displayed
 
     start_date_str = start_date.strftime('%Y-%m-%d') # Format date for API query
     today_str = date.today().strftime('%Y-%m-%d')
@@ -143,8 +144,9 @@ def load_data(url, start_date=START_DATE):
 
                 if 'total_count' in data: # Use total_count from API if available, otherwise, use fallback limit
                     total_count = min(data['total_count'], MAX_RECORDS_LIMIT) # Apply MAX_RECORDS_LIMIT as a cap
-                else:
+                elif not total_count_warning_displayed: # Display warning only once
                     st.warning("Clé 'total_count' manquante dans la réponse de l'API. Utilisation d'une limite maximale de rappels.")
+                    total_count_warning_displayed = True # Set flag to True
 
 
             except requests.exceptions.RequestException as e:
