@@ -310,35 +310,40 @@ def display_top_charts(data):
     """Displays top 5 subcategories and risks charts."""
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
 
-    if data.empty: # Check if data is empty at the start
+    if data.empty: # Early return if data is empty
         st.warning("Aucune donnée disponible pour afficher les graphiques Top 5.")
-        return  # Exit function if no data
+        return
 
     col1, col2 = st.columns(2)
 
     with col1:
-        top_subcategories = data['sous_categorie_de_produit'].value_counts().head(5)
-        if not top_subcategories.empty: # Check if series is empty before charting
-            fig_top_subcategories = px.bar(x=top_subcategories.index,
-                                           y=top_subcategories.values,
-                                           labels={'x': 'Sous-catégories', 'y': 'Nombre de rappels'},
+        top_subcategories_df = data['sous_categorie_de_produit'].value_counts().head(5).reset_index() # Create DataFrame
+        top_subcategories_df.columns = ['Sous_categorie', 'Nombre_de_rappels'] # Rename columns for clarity
+        if not top_subcategories_df.empty:
+            fig_top_subcategories = px.bar(top_subcategories_df,
+                                           x='Sous_categorie', # Use column name from DataFrame
+                                           y='Nombre_de_rappels', # Use column name from DataFrame
+                                           labels={'Sous_categorie': 'Sous-catégories', 'Nombre_de_rappels': 'Nombre de rappels'},
                                            title='Top 5 des Sous-catégories les plus Rappelées')
             st.plotly_chart(fig_top_subcategories, use_container_width=True)
         else:
-            st.info("Pas assez de données de sous-catégories pour afficher le graphique Top 5.") # Informative message
+            st.info("Pas assez de données de sous-catégories pour afficher le graphique Top 5.")
 
     with col2:
-        top_risks = data['risques_encourus_par_le_consommateur'].value_counts().head(5)
-        if not top_risks.empty: # Check if series is empty before charting
-            fig_top_risks = px.bar(x=top_risks.index,
-                                   y=top_risks.values,
-                                   labels={'x': 'Risques', 'y': 'Nombre de rappels'},
+        top_risks_df = data['risques_encourus_par_le_consommateur'].value_counts().head(5).reset_index() # Create DataFrame
+        top_risks_df.columns = ['Risque', 'Nombre_de_rappels'] # Rename columns for clarity
+        if not top_risks_df.empty:
+            fig_top_risks = px.bar(top_risks_df,
+                                   x='Risque', # Use column name from DataFrame
+                                   y='Nombre_de_rappels', # Use column name from DataFrame
+                                   labels={'Risque': 'Risques', 'Nombre_de_rappels': 'Nombre de rappels'},
                                    title='Top 5 des Risques les plus Fréquents')
             st.plotly_chart(fig_top_risks, use_container_width=True)
         else:
-            st.info("Pas assez de données de risques pour afficher le graphique Top 5.") # Informative message
+            st.info("Pas assez de données de risques pour afficher le graphique Top 5.")
 
     st.markdown("</div>", unsafe_allow_html=True)
+
 
 def get_relevant_data_as_text(user_question, data):
     """Extracts and formats relevant data from the DataFrame as text."""
@@ -506,4 +511,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
