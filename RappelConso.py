@@ -122,6 +122,8 @@ def load_data():
                 raise ValueError("Le lien d'exportation n'a pas été trouvé dans la réponse.")
         except ValueError as e:
             st.error(f"Erreur lors du traitement de la réponse JSON : {e}")
+        except Exception as e:
+            st.error(f"Erreur inattendue lors du traitement de la réponse : {e}")
     else:
         st.error(f"Erreur lors de l'exportation du dataset : {response.status_code}")
 
@@ -310,128 +312,132 @@ def main():
     # Load data
     df = load_data()
 
-    # Extract unique values for subcategories and risks
-    all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
-    all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
+    # Check if data was loaded successfully
+    if df is not None:
+        # Extract unique values for subcategories and risks
+        all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
+        all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
 
-    # --- Sidebar ---
-    st.sidebar.title("Navigation & Filtres")
-    page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
+        # --- Sidebar ---
+        st.sidebar.title("Navigation & Filtres")
+        page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
 
-    with st.sidebar.expander("Filtres avancés", expanded=False):
-        # Sub-category and risks filters (none selected by default)
-        selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
-        selected_risks = st.multiselect("Risques", options=all_risks, default=[])
+        with st.sidebar.expander("Filtres avancés", expanded=False):
+            # Sub-category and risks filters (none selected by default)
+            selected_subcategories = st.multiselect("Souscategories", options=all_subcategories, default=[])
+            selected_risks = st.multiselect("Risques", options=all_risks, default=[])
 
-        # Date range filter
-        min_date = df['date_de_publication'].min()
-        max_date = df['date_de_publication'].max()
-        selected_dates = st.slider("Sélectionnez la période",
-                                   min_value=min_date, max_value=max_date,
-                                   value=(min_date, max_date))
+            # Date range filter
+            min_date = df['date_de_publication'].min()
+            max_date = df['date_de_publication'].max()
+            selected_dates = st.slider("Sélectionnez la période",
+                                        min_value=min_date, max_value=max_date,
+                                        value=(min_date, max_date))
 
-    # --- Search Bar ---
-    search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
+        # --- Search Bar ---
+        search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
 
-    # --- Instructions Expander ---
-    with st.expander("Instructions d'utilisation"):
-        st.markdown("""
-        ### Instructions d'utilisation
+        # --- Instructions Expander ---
+        with st.expander("Instructions d'utilisation"):
+            st.markdown("""
+            ### Instructions d'utilisation
 
-        - **Filtres Avancés** : Utilisez les filtres pour affiner votre recherche par sous-catégories, risques et périodes de temps.
-        - **Nombre Total de Rappels** : Un indicateur du nombre total de rappels correspondant aux critères sélectionnés.
-        - **Graphiques Top 5** : Deux graphiques affichent les 5 sous-catégories de produits les plus rappelées et les 5 principaux risques.
-        - **Liste des Derniers Rappels** : Une liste paginée des rappels les plus récents, incluant le nom du produit, la date de rappel, la marque, le motif du rappel, et un lien pour voir l'affichette du rappel.
-        - **Chatbot** : Posez vos questions concernant les rappels de produits et obtenez des réponses basées sur les données les plus récentes.
-        """)
+            - **Filtres Avancés** : Utilisez les filtres pour affiner votre recherche par sous-catégories, risques et périodes de temps.
+            - **Nombre Total de Rappels** : Un indicateur du nombre total de rappels correspondant aux critères sélectionnés.
+            - **Graphiques Top 5** : Deux graphiques affichent les 5 sous-catégories de produits les plus rappelées et les 5 principaux risques.
+            - **Liste des Derniers Rappels** : Une liste paginée des rappels les plus récents, incluant le nom du produit, la date de rappel, la marque, le motif du rappel, et un lien pour voir l'affichette du rappel.
+            - **Chatbot** : Posez vos questions concernant les rappels de produits et obtenez des réponses basées sur les données les plus récentes.
+            """)
 
-    # --- Page Content ---
-    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
+        # --- Page Content ---
+        filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
 
-    if page == "Page principale":
-        display_metrics(filtered_data)
-        display_top_charts(filtered_data)  # Display top 5 charts for categories and risks
-        display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
+        if page == "Page principale":
+            display_metrics(filtered_data)
+            display_top_charts(filtered_data)  # Display top 5 charts for categories and risks
+            display_recent_recalls(filtered_data, start_index=st.session_state.start_index)
 
-    elif page == "Visualisation":
-        st.header("Visualisations des rappels de produits")
-        st.write("Cette page vous permet d'explorer différents aspects des rappels de produits à travers des graphiques interactifs.")
-        display_visualizations(filtered_data)
+        elif page == "Visualisation":
+            st.header("Visualisations des rappels de produits")
+            st.write("Cette page vous permet d'explorer différents aspects des rappels de produits à travers des graphiques interactifs.")
+            display_visualizations(filtered_data)
 
-    elif page == "Details":
-        st.header("Détails des rappels de produits")
-        st.write("Consultez un tableau détaillé des rappels de produits ici, incluant toutes les informations disponibles.")
+        elif page == "Details":
+            st.header("Détails des rappels de produits")
+            st.write("Consultez un tableau détaillé des rappels de produits ici, incluant toutes les informations disponibles.")
 
-        if not filtered_data.empty:
-            st.dataframe(filtered_data)
-            csv = filtered_data.to_csv(index=False).encode('utf-8')
-            st.download_button(label="Télécharger les données filtrées",
-                               data=csv,
-                               file_name='details_rappels.csv',
-                               mime='text/csv')
-        else:
-            st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
-
-    elif page == "Chatbot":
-        st.header("Posez vos questions sur les rappels de produits")
-
-        model = configure_model()  # Créez l'instance du modèle
-
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
-
-        user_input = st.text_area("Votre question:", height=150)
-
-        if st.button("Envoyer"):
-            if user_input.strip() == "":
-                st.warning("Veuillez entrer une question valide.")
+            if not filtered_data.empty:
+                st.dataframe(filtered_data)
+                csv = filtered_data.to_csv(index=False).encode('utf-8')
+                st.download_button(label="Télécharger les données filtrées",
+                                    data=csv,
+                                    file_name='details_rappels.csv',
+                                    mime='text/csv')
             else:
-                with st.spinner('Gemini Pro réfléchit...'):
-                    try:
-                        # Détecter la langue de l'entrée utilisateur
-                        language = detect_language(user_input)
+                st.error("Aucune donnée à afficher. Veuillez ajuster vos filtres ou choisir une autre année.")
 
-                        # Extraire les données pertinentes des rappels filtrés
-                        relevant_data = get_relevant_data_as_text(user_input, filtered_data)
+        elif page == "Chatbot":
+            st.header("Posez vos questions sur les rappels de produits")
 
-                        # Créer un contexte structuré pour le modèle
-                        context = (
-                            "Informations sur les rappels filtrés :\n\n" +
-                            relevant_data +
-                            "\n\nQuestion de l'utilisateur : " + user_input
-                        )
+            model = configure_model()  # Créez l'instance du modèle
 
-                        # Démarrer une session de chat ou continuer la session existante
-                        convo = model.start_chat(history=st.session_state.chat_history)
+            if "chat_history" not in st.session_state:
+                st.session_state.chat_history = []
 
-                        # Envoyer le contexte structuré et la question
-                        response = convo.send_message(context)
+            user_input = st.text_area("Votre question:", height=150)
 
-                        # Mettre à jour l'historique du chat
-                        st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
-                        st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
+            if st.button("Envoyer"):
+                if user_input.strip() == "":
+                    st.warning("Veuillez entrer une question valide.")
+                else:
+                    with st.spinner('Gemini Pro réfléchit...'):
+                        try:
+                            # Détecter la langue de l'entrée utilisateur
+                            language = detect_language(user_input)
 
-                        # Afficher l'historique du chat avec une mise en forme améliorée
-                        for message in st.session_state.chat_history:
-                            role = message["role"]
-                            content = message["parts"][0]
-                            if role == "user":
-                                st.markdown(f"**Vous :** {content}")
-                            else:
-                                st.markdown(f"**Assistant :** {content}")
-                    except Exception as e:
-                        st.error(f"Une erreur s'est produite: {e}")
+                            # Extraire les données pertinentes des rappels filtrés
+                            relevant_data = get_relevant_data_as_text(user_input, filtered_data)
 
-    # --- Logo and Link in Sidebar ---
-    st.sidebar.markdown(
-        f"""
-        <div class="sidebar-logo-container">
-            <a href="https://www.visipilot.com" target="_blank">
-                <img src="https://raw.githubusercontent.com/M00N69/RAPPELCONSO/main/logo%2004%20copie.jpg" alt="Visipilot Logo" class="sidebar-logo">
-            </a>
-        </div>
-        """, unsafe_allow_html=True
-    )
+                            # Créer un contexte structuré pour le modèle
+                            context = (
+                                "Informations sur les rappels filtrés :\n\n" +
+                                relevant_data +
+                                "\n\nQuestion de l'utilisateur : " + user_input
+                            )
+
+                            # Démarrer une session de chat ou continuer la session existante
+                            convo = model.start_chat(history=st.session_state.chat_history)
+
+                            # Envoyer le contexte structuré et la question
+                            response = convo.send_message(context)
+
+                            # Mettre à jour l'historique du chat
+                            st.session_state.chat_history.append({"role": "user", "parts": [user_input]})
+                            st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
+
+                            # Afficher l'historique du chat avec une mise en forme améliorée
+                            for message in st.session_state.chat_history:
+                                role = message["role"]
+                                content = message["parts"][0]
+                                if role == "user":
+                                    st.markdown(f"**Vous :** {content}")
+                                else:
+                                    st.markdown(f"**Assistant :** {content}")
+                        except Exception as e:
+                            st.error(f"Une erreur s'est produite: {e}")
+
+        # --- Logo and Link in Sidebar ---
+        st.sidebar.markdown(
+            f"""
+            <div class="sidebar-logo-container">
+                <a href="https://www.visipilot.com" target="_blank">
+                    <img src="https://raw.githubusercontent.com/M00N69/RAPPELCONSO/main/logo%2004%20copie.jpg" alt="Visipilot Logo" class="sidebar-logo">
+                </a>
+            </div>
+            """, unsafe_allow_html=True
+        )
+    else:
+        st.error("Erreur lors du chargement des données. Veuillez réessayer.")
 
 if __name__ == "__main__":
     main()
