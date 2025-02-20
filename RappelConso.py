@@ -84,7 +84,7 @@ st.markdown("""
 
 # --- Constants ---
 DATASET_ID = "rappelconso0"
-EXPORT_URL = f"https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/{DATASET_ID}/exports/csv"
+BASE_URL = f"https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/{DATASET_ID}/records"
 
 # --- Gemini Pro API Settings ---
 api_key = st.secrets["api_key"]
@@ -106,27 +106,33 @@ Vos réponses doivent être aussi claires et précises que possible, pour éclai
 
 @st.cache_data
 def load_data():
-    """Loads and preprocesses the recall data using the export endpoint."""
-    response = requests.get(EXPORT_URL)
-    if response.status_code == 200:
-        try:
-            export_link = response.json().get('url')
-            if export_link:
-                csv_response = requests.get(export_link)
-                csv_data = csv_response.content.decode('utf-8-sig')  # Use utf-8-sig to handle BOM
-                df = pd.read_csv(pd.compat.StringIO(csv_data))
-                df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
-                df = df.dropna(subset=['date_de_publication'])
-                return df
-            else:
-                st.error("Le lien d'exportation n'a pas été trouvé dans la réponse.")
-        except ValueError as e:
-            st.error(f"Erreur lors du traitement de la réponse JSON : {e}")
-        except Exception as e:
-            st.error(f"Erreur inattendue lors du traitement de la réponse : {e}")
-    else:
-        st.error(f"Erreur lors de l'exportation du dataset : {response.status_code}")
-    return None
+    """Loads and preprocesses the recall data using the records endpoint with pagination."""
+    all_data = []
+    offset = 0
+    limit = 10000  # Maximum limit for a single request
+
+    while True:
+        params = {
+            "select": "*",
+            "limit": limit,
+            "offset": offset,
+            "timezone": "UTC"
+        }
+        response = requests.get(BASE_URL, params=params)
+        if response.status_code == 200:
+            data = response.json().get('records', [])
+            if not data:
+                break
+            all_data.extend(data)
+            offset += limit
+        else:
+            st.error(f"Erreur lors du chargement des données : {response.status_code}")
+            return None
+
+    df = pd.DataFrame([rec['fields'] for rec in all_data])
+    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
+    df = df.dropna(subset=['date_de_publication'])
+    return df
 
 def filter_data(df, subcategories, risks, search_term, date_range):
     """Filters the data based on user selections and search term."""
@@ -442,4 +448,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
