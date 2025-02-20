@@ -3,8 +3,9 @@ import pandas as pd
 import plotly.express as px
 import requests
 from datetime import datetime
-import google.generativeai as genai
 from urllib.parse import quote  # Importez quote pour l'encodage d'URL
+import json  # Importez le module json
+import google.generativeai as genai
 
 # Configuration de la page
 st.set_page_config(layout="wide")
@@ -136,13 +137,26 @@ def load_data():
             params['q'] = quote(params['q'])
 
             response = requests.get(BASE_URL, params=params)
+            # Affiche le code de statut HTTP
+            st.write(f"Code de statut HTTP : {response.status_code}")
             response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
 
-            data = response.json().get('records', [])
-            if not data:
+            try:
+                data = response.json()  # Décode la réponse JSON
+                # Affiche le JSON brut (pour debug)
+                st.write("Réponse JSON brute :")
+                st.json(data)
+            except json.JSONDecodeError as e:
+                st.error(f"Erreur lors du décodage JSON : {e}")
+                st.error(f"Contenu de la réponse (non JSON) : {response.text}")  # Affiche le contenu brut en cas d'erreur JSON
+                return None
+
+            records = data.get('records', [])
+            if not records:
+                st.info("Aucun enregistrement trouvé dans la réponse API.")
                 break
 
-            all_data.extend(data)
+            all_data.extend(records)
             offset += limit
 
             if offset > 5000:  # Limiting the offset to prevent very long requests
@@ -152,8 +166,8 @@ def load_data():
     except requests.exceptions.RequestException as e:
         st.error(f"Erreur lors du chargement des données : {e}")
         return None
-    except ValueError as e:
-        st.error(f"Erreur lors du décodage JSON : {e}")
+    except Exception as e: # Capture les autres exceptions
+        st.error(f"Une erreur inattendue s'est produite : {e}")
         return None
 
     if all_data:
