@@ -112,40 +112,40 @@ except KeyError:
 def load_data(url=DATA_URL):
     """Loads and preprocesses the recall data."""
     try:
-        st.write("Attempting to load data from:", url)  # Debugging message
+        st.write("Attempting to load data from:", url)
 
         response = requests.get(url)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+        response.raise_for_status()
 
-        st.write("API Response Status Code:", response.status_code)  # Debugging
+        st.write("API Response Status Code:", response.status_code)
 
         data = response.json()
 
-        if not data or 'records' not in data or not data['records']:  # Check for empty response
+        if not data or 'records' not in data or not data['records']:
             st.warning("API returned an empty dataset.")
             return pd.DataFrame()
 
         df = pd.DataFrame([rec['fields'] for rec in data['records']])
 
-        st.write("DataFrame shape after initial load:", df.shape)  # Debugging
+        st.write("DataFrame shape after initial load:", df.shape)
 
         # Convert date_de_publication to datetime using pd.to_datetime()
-        df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
+        df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce')  # Convert to datetime
 
         # Handle rows with invalid dates
         df = df.dropna(subset=['date_de_publication'])
 
-        st.write("DataFrame shape after dropping NaN dates:", df.shape)  # Debugging
+        st.write("DataFrame shape after dropping NaN dates:", df.shape)
 
         # Ensure that date filtering includes the current day's data
-        df = df[df['date_de_publication'] >= START_DATE]
+        df = df[df['date_de_publication'].dt.date >= START_DATE] # Correct date filtering
 
-        st.write("DataFrame shape after date filtering:", df.shape)  # Debugging
+        st.write("DataFrame shape after date filtering:", df.shape)
 
         # Sort the DataFrame by date in descending order (most recent first)
         df = df.sort_values(by='date_de_publication', ascending=False)
 
-        st.write("DataFrame shape after sorting:", df.shape)  # Debugging
+        st.write("DataFrame shape after sorting:", df.shape)
 
         return df
 
@@ -162,7 +162,7 @@ def filter_data(df, subcategories, risks, search_term, date_range):
     start_date, end_date = date_range
 
     # Filter by date range
-    filtered_df = df[(df['date_de_publication'] >= start_date) & (df['date_de_publication'] <= end_date)]
+    filtered_df = df[(df['date_de_publication'].dt.date >= start_date) & (df['date_de_publication'].dt.date <= end_date)]
 
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
@@ -507,4 +507,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
