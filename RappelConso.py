@@ -153,7 +153,6 @@ def load_data(url, start_date=START_DATE):
                     st.warning("Clé 'total_count' manquante dans la réponse de l'API. Utilisation d'une limite maximale de rappels.")
                     total_count_warning_displayed = True # Set flag to True
 
-
             except requests.exceptions.RequestException as e:
                 st.error(f"Erreur de requête API: {e}")
                 print(f"API Request Error: {e}") # Debug: Print error details
@@ -166,7 +165,6 @@ def load_data(url, start_date=START_DATE):
                 st.error(f"Délai d'attente dépassé lors de la requête à l'API. L'API RappelConso est peut-être lente ou inaccessible. Veuillez réessayer plus tard.")
                 print("API Timeout Error") # Debug: Timeout
                 return pd.DataFrame()
-
 
     if not all_records:
         print("No records loaded in total.") # Debug: No data at all
@@ -183,7 +181,6 @@ def load_data(url, start_date=START_DATE):
 
     return df
 
-
 def filter_data(df, subcategories, risks, search_term, date_range): # Added date_range parameter
     """Filters the data based on user selections and search term."""
 
@@ -192,7 +189,6 @@ def filter_data(df, subcategories, risks, search_term, date_range): # Added date
 
     # Apply date range filter from slider
     filtered_df = filtered_df[(filtered_df['date_de_publication'] >= start_date) & (filtered_df['date_de_publication'] <= end_date)]
-
 
     if subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
@@ -218,7 +214,6 @@ def display_metrics(data):
         if st.button("🔄 Mettre à jour les données"):
             clear_cache()
             st.session_state["restart_key"] = st.session_state.get("restart_key", 0) + 1
-
 
 def display_recent_recalls(data, start_index=0, items_per_page=10):
     """Displays recent recalls in a visually appealing format with pagination, arranged in two columns."""
@@ -258,7 +253,6 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
         """, unsafe_allow_html=True)
     else:
         st.error("Aucune donnée disponible pour l'affichage des rappels.")
-
 
 def display_visualizations(data):
     """Creates and displays the visualizations."""
@@ -344,7 +338,6 @@ def display_top_charts(data):
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-
 def get_relevant_data_as_text(user_question, data):
     """Extracts and formats relevant data from the DataFrame as text."""
     keywords = user_question.lower().split()
@@ -411,7 +404,6 @@ def main():
         selected_dates = st.slider("Sélectionnez la période",
                                    min_value=min_date, max_value=max_date,
                                    value=default_dates) # Set default value
-
 
     # --- Search Bar ---
     search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
