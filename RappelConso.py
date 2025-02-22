@@ -84,10 +84,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Constants ---
-BASE_DATA_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso0&q=categorie_de_produit:Alimentation"
+API_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso-v2-gtin-espaces&q=&rows=10000"
 START_DATE = date(2022, 1, 1)  # Define the start date for filtering
 API_PAGE_SIZE = 10000 # Define page size for API requests
-MAX_RECORDS_LIMIT = 10000 # Fallback limit in case total_count is missing or unreliable
 API_TIMEOUT_SEC = 30 # Timeout for API requests
 
 # --- Gemini Pro API Settings ---
@@ -123,7 +122,7 @@ def load_data(url, start_date=START_DATE):
     today_str = date.today().strftime('%Y-%m-%d')
 
     # Construct base URL with date filter to load data from START_DATE to today
-    base_url_with_date_filter = f"{url}&refine.date_de_publication>={start_date_str}&refine.date_de_publication<={today_str}&rows={API_PAGE_SIZE}" # Changed to >= and <= to include start and end dates
+    base_url_with_date_filter = f"{url}&refine.date_publication>={start_date_str}&refine.date_publication<={today_str}&rows={API_PAGE_SIZE}" # Changed to >= and <= to include start and end dates
 
     with st.spinner("Chargement initial des données (depuis 2022)..."): # Updated spinner message
         request_url = base_url_with_date_filter
@@ -163,10 +162,10 @@ def load_data(url, start_date=START_DATE):
     print(f"DataFrame created with {len(df)} rows.") # Debug: DataFrame size
 
     # Convert date_de_publication to datetime objects (already strings from API)
-    df['date_de_publication'] = pd.to_datetime(df['date_de_publication'], errors='coerce').dt.date
+    df['date_publication'] = pd.to_datetime(df['date_publication'], errors='coerce').dt.date
 
-    df = df.dropna(subset=['date_de_publication']) # Clean invalid dates if any remain after API date filter (should not be needed much)
-    df = df.sort_values(by='date_de_publication', ascending=False)
+    df = df.dropna(subset=['date_publication']) # Clean invalid dates if any remain after API date filter (should not be needed much)
+    df = df.sort_values(by='date_publication', ascending=False)
 
     return df
 
@@ -177,12 +176,12 @@ def filter_data(df, subcategories, risks, search_term, date_range): # Added date
     start_date, end_date = date_range # Unpack date range from slider
 
     # Apply date range filter from slider
-    filtered_df = filtered_df[(filtered_df['date_de_publication'] >= start_date) & (filtered_df['date_de_publication'] <= end_date)]
+    filtered_df = filtered_df[(filtered_df['date_publication'] >= start_date) & (filtered_df['date_publication'] <= end_date)]
 
     if subcategories:
-        filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(subcategories)]
+        filtered_df = filtered_df[filtered_df['sous_categorie_produit'].isin(subcategories)]
     if risks:
-        filtered_df = filtered_df[filtered_df['risques_encourus_par_le_consommateur'].isin(risks)]
+        filtered_df = filtered_df[filtered_df['risques_encourus'].isin(risks)]
 
     if search_term:
         filtered_df = filtered_df[filtered_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
@@ -228,13 +227,13 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
             with col1 if idx % 2 == 0 else col2:
                st.markdown(f"""
             <div class="recall-container">
-                <img src="{row['liens_vers_les_images']}" class="recall-image" alt="Product Image: {row['noms_des_modeles_ou_references'] if 'noms_des_modeles_ou_references' in row else 'N/A'}">
+                <img src="{row['liens_vers_les_images'].split('|')[0] if 'liens_vers_les_images' in row else '#'}" class="recall-image" alt="Product Image: {row['modeles_ou_references'] if 'modeles_ou_references' in row else 'N/A'}">
                 <div class="recall-content">
-                    <div class="recall-title">{row['noms_des_modeles_ou_references'] if 'noms_des_modeles_ou_references' in row else 'N/A'}</div>
-                    <div class="recall-date">{row['date_de_publication'].strftime('%d/%m/%Y') if isinstance(row['date_de_publication'], date) else 'N/A'}</div>
+                    <div class="recall-title">{row['modeles_ou_references'] if 'modeles_ou_references' in row else 'N/A'}</div>
+                    <div class="recall-date">{row['date_publication'].strftime('%d/%m/%Y') if isinstance(row['date_publication'], date) else 'N/A'}</div>
                     <div class="recall-description">
-                        <strong>Marque:</strong> {row['nom_de_la_marque_du_produit'] if 'nom_de_la_marque_du_produit' in row else 'N/A'}<br>
-                        <strong>Motif du rappel:</strong> {row['motif_du_rappel'] if 'motif_du_rappel' in row else 'N/A'}
+                        <strong>Marque:</strong> {row['marque_produit'] if 'marque_produit' in row else 'N/A'}<br>
+                        <strong>Motif du rappel:</strong> {row['motif_rappel'] if 'motif_rappel' in row else 'N/A'}
                     </div>
                     <a href="{row['lien_vers_affichette_pdf'] if 'lien_vers_affichette_pdf' in row else '#'}" target="_blank">Voir l'affichette</a>
                 </div>
@@ -246,20 +245,20 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
 def display_visualizations(data):
     """Creates and displays the visualizations."""
     if not data.empty:
-        value_counts = data['sous_categorie_de_produit'].value_counts(normalize=True) * 100
+        value_counts = data['sous_categorie_produit'].value_counts(normalize=True) * 100
         significant_categories = value_counts[value_counts >= 2]
-        filtered_categories_data = data[data['sous_categorie_de_produit'].isin(significant_categories.index)]
+        filtered_categories_data = data[data['sous_categorie_produit'].isin(significant_categories.index)]
 
-        legal_counts = data['nature_juridique_du_rappel'].value_counts(normalize=True) * 100
+        legal_counts = data['nature_juridique_rappel'].value_counts(normalize=True) * 100
         significant_legal = legal_counts[legal_counts >= 2]
-        filtered_legal_data = data[data['nature_juridique_du_rappel'].isin(significant_legal.index)]
+        filtered_legal_data = data[data['nature_juridique_rappel'].isin(significant_legal.index)]
 
         if not filtered_categories_data.empty and not filtered_legal_data.empty:
             col1, col2 = st.columns(2)
 
             with col1:
                 fig_products = px.pie(filtered_categories_data,
-                                      names='sous_categorie_de_produit',
+                                      names='sous_categorie_produit',
                                       title='Répartition par Sous-catégories (Top)',
                                       color_discrete_sequence=px.colors.sequential.RdBu,
                                       width=600,
@@ -268,7 +267,7 @@ def display_visualizations(data):
 
             with col2:
                 fig_legal = px.pie(filtered_legal_data,
-                                   names='nature_juridique_du_rappel',
+                                   names='nature_juridique_rappel',
                                    title='Répartition par Type de Décision (Top)',
                                    color_discrete_sequence=px.colors.sequential.RdBu,
                                    width=600,
@@ -276,7 +275,7 @@ def display_visualizations(data):
                 st.plotly_chart(fig_legal, use_container_width=True)
 
             # Bar chart for monthly recalls
-            data['month'] = pd.to_datetime(data['date_de_publication']).dt.strftime('%Y-%m')
+            data['month'] = pd.to_datetime(data['date_publication']).dt.strftime('%Y-%m')
             recalls_per_month = data.groupby('month').size().reset_index(name='counts')
             fig_monthly_recalls = px.bar(recalls_per_month,
                                          x='month', y='counts',
@@ -300,7 +299,7 @@ def display_top_charts(data):
     col1, col2 = st.columns(2)
 
     with col1:
-        top_subcategories_df = data['sous_categorie_de_produit'].value_counts().head(5).reset_index() # Create DataFrame
+        top_subcategories_df = data['sous_categorie_produit'].value_counts().head(5).reset_index() # Create DataFrame
         top_subcategories_df.columns = ['Sous_categorie', 'Nombre_de_rappels'] # Rename columns for clarity
         if not top_subcategories_df.empty:
             fig_top_subcategories = px.bar(top_subcategories_df,
@@ -313,7 +312,7 @@ def display_top_charts(data):
             st.info("Pas assez de données de sous-catégories pour afficher le graphique Top 5.")
 
     with col2:
-        top_risks_df = data['risques_encourus_par_le_consommateur'].value_counts().head(5).reset_index() # Create DataFrame
+        top_risks_df = data['risques_encourus'].value_counts().head(5).reset_index() # Create DataFrame
         top_risks_df.columns = ['Risque', 'Nombre_de_rappels'] # Rename columns for clarity
         if not top_risks_df.empty:
             fig_top_risks = px.bar(top_risks_df,
@@ -337,11 +336,11 @@ def get_relevant_data_as_text(user_question, data):
 
     context = "Informations pertinentes de la base de données RappelConso:\n"
     for index, row in selected_rows.iterrows():
-        context += f"- Date de Publication: {row['date_de_publication'].strftime('%d/%m/%Y') if isinstance(row['date_de_publication'], date) else 'N/A'}\n"
-        context += f"- Nom du Produit: {row.get('noms_des_modeles_ou_references', 'N/A')}\n"
-        context += f"- Marque: {row.get('nom_de_la_marque_du_produit', 'N/A')}\n"
-        context += f"- Risques: {row.get('risques_encourus_par_le_consommateur', 'N/A')}\n"
-        context += f"- Catégorie: {row.get('sous_categorie_de_produit', 'N/A')}\n"
+        context += f"- Date de Publication: {row['date_publication'].strftime('%d/%m/%Y') if isinstance(row['date_publication'], date) else 'N/A'}\n"
+        context += f"- Nom du Produit: {row.get('modeles_ou_references', 'N/A')}\n"
+        context += f"- Marque: {row.get('marque_produit', 'N/A')}\n"
+        context += f"- Risques: {row.get('risques_encourus', 'N/A')}\n"
+        context += f"- Catégorie: {row.get('sous_categorie_produit', 'N/A')}\n"
         context += "\n"
     return context
 
@@ -367,15 +366,15 @@ def main():
         st.session_state.start_index = 0
 
     # Load data using API filtering for date, starting from 2022-01-01
-    df = load_data(BASE_DATA_URL, START_DATE)
+    df = load_data(API_URL, START_DATE)
 
     if df.empty: # Stop if initial data load fails - HANDLE EMPTY DATAFRAME HERE
         st.error("Impossible de charger les données de rappels depuis l'API. Veuillez vérifier la console pour plus de détails. L'API RappelConso est peut-être inaccessible ou ne retourne pas de données pour la période spécifiée.")
         st.stop() # Stop further execution
 
     # Extract unique values for subcategories and risks
-    all_subcategories = df['sous_categorie_de_produit'].unique().tolist()
-    all_risks = df['risques_encourus_par_le_consommateur'].unique().tolist()
+    all_subcategories = df['sous_categorie_produit'].unique().tolist()
+    all_risks = df['risques_encourus'].unique().tolist()
 
     # --- Sidebar ---
     st.sidebar.title("Navigation & Filtres")
