@@ -16,7 +16,7 @@ st.markdown("""
         .recall-container {
             background-color: #f9f9f9;
             border-radius: 10px;
-            box-shadow: 0 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             padding: 15px;
             margin-bottom: 20px;
             display: flex;
@@ -25,7 +25,7 @@ st.markdown("""
 
         /* Image styling */
         .recall-image {
-            width: auto;
+            width: 120px;
             height: auto;
             border-radius: 10px;
             margin-right: 20px;
@@ -77,7 +77,7 @@ st.markdown("""
             background-color: #ffffff;
             border-radius: 10px;
             padding: 15px;
-            box-shadow: 0 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
     </style>
@@ -232,8 +232,8 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
                     <div class="recall-title">{row['modeles_ou_references'] if 'modeles_ou_references' in row else 'N/A'}</div>
                     <div class="recall-date">{row['date_publication'].strftime('%d/%m/%Y') if isinstance(row['date_publication'], date) else 'N/A'}</div>
                     <div class="recall-description">
-                        <strong>Marque:</strong> {row['marque_produit'] if 'marque_produit' in row else 'N/A'}<br>
-                        <strong>Motif du rappel:</strong> {row['motif_rappel'] if 'motif_rappel' in row else 'N/A'}
+                        <strong>Marque:</strong> {row.get('marque_produit', 'N/A')}<br>
+                        <strong>Motif du rappel:</strong> {row.get('motif_rappel', 'N/A')}
                     </div>
                     <a href="{row['lien_vers_affichette_pdf'] if 'lien_vers_affichette_pdf' in row else '#'}" target="_blank">Voir l'affichette</a>
                 </div>
@@ -330,7 +330,7 @@ def get_relevant_data_as_text(user_question, data):
     """Extracts and formats relevant data from the DataFrame as text."""
     keywords = user_question.lower().split()
     selected_rows = data[data.apply(
-        lambda row: any(keyword in str(val).lower() for keyword in row),
+        lambda row: any(keyword in str(val).lower() for keyword in keywords for val in row),
         axis=1
     )].head(3)  # Limit to 3 rows
 
