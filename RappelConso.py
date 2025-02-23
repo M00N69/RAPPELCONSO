@@ -122,7 +122,7 @@ def load_data(url, start_date=START_DATE):
     today_str = date.today().strftime('%Y-%m-%d')
 
     # Construct base URL with date filter to load data from START_DATE to today
-    base_url_with_date_filter = f"{url}&refine.date_publication:>={urllib.parse.quote(start_date_str)}&refine.date_publication:<={urllib.parse.quote(today_str)}"
+    base_url_with_date_filter = f"{url}&refine.date_publication:>={urllib.parse.quote(start_date_str)}&refine.date_publication:<={urllib.parse.quote(today_str)}&refine.categorie_de_produit=Alimentation"
 
     with st.spinner("Chargement initial des données (depuis 2022)..."): # Updated spinner message
         request_url = base_url_with_date_filter
@@ -491,3 +491,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
