@@ -390,17 +390,21 @@ def main():
     page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
 
     with st.sidebar.expander("Filtres avancés", expanded=False):
-        # Sub-category and risks filters (none selected by default)
-        selected_subcategories = st.multiselect("Sous-catégories", options=all_subcategories, default=[])
-        selected_risks = st.multiselect("Risques", options=all_risks, default=[])
+    # Sub-category and risks filters (none selected by default)
+    selected_subcategories = st.multiselect("Sous-catégories", options=all_subcategories, default=[])
+    selected_risks = st.multiselect("Risques", options=all_risks, default=[])
 
-        # Date range filter - RE-ADDED SLIDER HERE
-        min_date = START_DATE # Minimum date is fixed to START_DATE
-        max_date = date.today() # Maximum date is today
-        default_dates = (START_DATE, max_date) # Default range from START_DATE to today
-        selected_dates = st.slider("Sélectionnez la période",
-                                   min_value=min_date, max_value=max_date,
-                                   value=default_dates) # Set default value
+    # Ajout du filtre pour la catégorie de produit
+    all_categories = df['categorie_produit'].unique().tolist()  # Assurez-vous que 'categorie_produit' est le bon nom de colonne
+    selected_categories = st.multiselect("Catégories de produits", options=all_categories, default=[])
+
+    # Date range filter - RE-ADDED SLIDER HERE
+    min_date = START_DATE  # Minimum date is fixed to START_DATE
+    max_date = date.today()  # Maximum date is today
+    default_dates = (START_DATE, max_date)  # Default range from START_DATE to today
+    selected_dates = st.slider("Sélectionnez la période",
+                               min_value=min_date, max_value=max_date,
+                               value=default_dates)  # Set default value
 
     # --- Search Bar ---
     search_term = st.text_input("Recherche (Nom produit, Marque, etc.)", "")
