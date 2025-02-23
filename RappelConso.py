@@ -10,7 +10,7 @@ import urllib.parse  # Import for URL encoding
 st.set_page_config(layout="wide")
 
 # --- Constants ---
-API_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso-v2-gtin-espaces&q=&rows=10000"
+API_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso-v2-gtin-espaces&q="
 START_DATE = date(2022, 1, 1)  # Define the start date for filtering
 API_PAGE_SIZE = 10000  # Define page size for API requests
 API_TIMEOUT_SEC = 30  # Timeout for API requests
@@ -54,7 +54,7 @@ def load_data(url, start_date=START_DATE, category=None):
         base_url_with_date_filter += f"&refine.categorie_produit={urllib.parse.quote(category)}"
     
     while True:
-        response = requests.get(base_url_with_date_filter + f"&offset={offset}&rows={API_PAGE_SIZE}", timeout=API_TIMEOUT_SEC)
+        response = requests.get(f"{base_url_with_date_filter}&offset={offset}&rows={API_PAGE_SIZE}", timeout=API_TIMEOUT_SEC)
         if response.status_code != 200:
             st.error(f"Failed to fetch data: {response.status_code} - {response.text}")
             break
@@ -89,7 +89,10 @@ def load_data(url, start_date=START_DATE, category=None):
     ]
     
     df = pd.DataFrame(processed_records)
-    df['date_publication'] = pd.to_datetime(df['date_publication'])
+    
+    # Convert date_publication to datetime if it exists
+    if 'date_publication' in df.columns:
+        df['date_publication'] = pd.to_datetime(df['date_publication'], errors='coerce')
     
     return df
 
@@ -407,3 +410,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
