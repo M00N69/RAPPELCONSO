@@ -232,8 +232,8 @@ def display_recent_recalls(data, start_index=0, items_per_page=10):
                     <div class="recall-title">{row['modeles_ou_references'] if 'modeles_ou_references' in row else 'N/A'}</div>
                     <div class="recall-date">{row['date_publication'].strftime('%d/%m/%Y') if isinstance(row['date_publication'], date) else 'N/A'}</div>
                     <div class="recall-description">
-                        <strong>Marque:</strong> {row['marque_produit'] if 'marque_produit' in row else 'N/A'}<br>
-                        <strong>Motif du rappel:</strong> {row['motif_rappel'] if 'motif_rappel' in row else 'N/A'}
+                        <strong>Marque:</strong> {row.get('marque_produit', 'N/A')}<br>
+                        <strong>Motif du rappel:</strong> {row.get('motif_rappel', 'N/A')}
                     </div>
                     <a href="{row['lien_vers_affichette_pdf'] if 'lien_vers_affichette_pdf' in row else '#'}" target="_blank">Voir l'affichette</a>
                 </div>
@@ -491,4 +491,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
