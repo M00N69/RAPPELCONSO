@@ -405,7 +405,7 @@ def main():
         - **Nombre Total de Rappels** : Un indicateur du nombre total de rappels correspondant aux critères sélectionnés.
         - **Graphiques Top 5** : Deux graphiques affichent les 5 sous-catégories de produits les plus rappelées et les 5 principaux risques.
         - **Liste des Derniers Rappels** : Une liste paginée des rappels les plus récents, incluant le nom du produit, la date de rappel, la marque, le motif du rappel, et un lien pour voir l'affichette du rappel.
-        - **Chatbot** : Posez vos questions concernant les rappels de produits et obtenez des réponses basées sur les données les plus récentes.
+        - **Chatbot** : Posez vos questions concernant les rappels de produits alimentaires en France.
         - **Mettre à jour les données**: Cliquez sur le bouton pour recharger les données les plus récentes depuis la source.
         """)
 
