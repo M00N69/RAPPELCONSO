@@ -10,7 +10,7 @@ import urllib.parse  # Import for URL encoding
 st.set_page_config(layout="wide")
 
 # --- Constants ---
-API_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso-v2-gtin-espaces&q="
+API_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso-v2-gtin-espaces&q=&rows=10000"
 START_DATE = date(2022, 1, 1)  # Define the start date for filtering
 API_PAGE_SIZE = 10000  # Define page size for API requests
 API_TIMEOUT_SEC = 30  # Timeout for API requests
