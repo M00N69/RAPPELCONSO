@@ -281,8 +281,8 @@ def main():
     if 'start_index' not in st.session_state:
         st.session_state.start_index = 0
 
-    # Load data using API filtering for date, starting from 2022-01-01
-    df = load_data(API_URL, START_DATE)
+    # Load data using API filtering for date, starting from 2022-01-01, and category "alimentation"
+    df = load_data(API_URL, START_DATE, category="alimentation")
 
     if df.empty:  # Stop if initial data load fails - HANDLE EMPTY DATAFRAME HERE
         st.error("Impossible de charger les données de rappels depuis l'API. Veuillez vérifier la console pour plus de détails. L'API RappelConso est peut-être inaccessible ou ne retourne pas de données pour la période spécifiée.")
@@ -291,16 +291,12 @@ def main():
     # Extract unique values for subcategories and risks
     all_subcategories = df['sous_categorie_produit'].unique().tolist()
     all_risks = df['risques_encourus'].unique().tolist()
-    all_categories = df['categorie_produit'].unique().tolist()
 
     # --- Sidebar ---
     st.sidebar.title("Navigation & Filtres")
     page = st.sidebar.selectbox("Choisir Page", ["Page principale", "Visualisation", "Details", "Chatbot"])
 
     with st.sidebar.expander("Filtres avancés", expanded=False):
-        # Category filter
-        selected_category = st.selectbox("Catégorie", options=["Toutes"] + all_categories, index=0)
-
         # Sub-category and risks filters (none selected by default)
         selected_subcategories = st.multiselect("Sous-catégories", options=all_subcategories, default=[])
         selected_risks = st.multiselect("Risques", options=all_risks, default=[])
@@ -330,10 +326,7 @@ def main():
         """)
 
     # --- Page Content ---
-    if selected_category == "Toutes":
-        filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
-    else:
-        filtered_data = filter_data(df[df['categorie_produit'] == selected_category], selected_subcategories, selected_risks, search_term, selected_dates)
+    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates)
 
     if page == "Page principale":
         display_metrics(filtered_data)
