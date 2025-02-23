@@ -10,7 +10,7 @@ import urllib.parse  # Import for URL encoding
 st.set_page_config(layout="wide")
 
 # --- Constants ---
-API_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso-v2-gtin-espaces&q=&rows=10000"
+API_URL = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso-v2-gtin-espaces&q="
 START_DATE = date(2022, 1, 1)  # Define the start date for filtering
 API_PAGE_SIZE = 10000  # Define page size for API requests
 API_TIMEOUT_SEC = 30  # Timeout for API requests
@@ -297,8 +297,12 @@ def main():
         st.stop()  # Stop further execution
 
     # Extract unique values for subcategories and risks
-    all_subcategories = df['sous_categorie_produit'].unique().tolist()
-    all_risks = df['risques_encourus'].unique().tolist()
+    if not df.empty:
+        all_subcategories = df['sous_categorie_produit'].unique().tolist()
+        all_risks = df['risques_encourus'].unique().tolist()
+    else:
+        all_subcategories = []
+        all_risks = []
 
     # --- Sidebar ---
     st.sidebar.title("Navigation & Filtres")
