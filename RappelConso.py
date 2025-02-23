@@ -169,22 +169,31 @@ def load_data(url, start_date=START_DATE):
 
     return df
 
-def filter_data(df, subcategories, risks, search_term, date_range): # Added date_range parameter
-    """Filters the data based on user selections and search term."""
+def filter_data(data, selected_subcategories, selected_risks, search_term, selected_dates, selected_categories):
+    """Filters the DataFrame based on the given criteria."""
+    filtered_df = data.copy()
 
-    filtered_df = df.copy() # Start with a copy to avoid modifying original DataFrame
-    start_date, end_date = date_range # Unpack date range from slider
+    # Filter by subcategories
+    if selected_subcategories:
+        filtered_df = filtered_df[filtered_df['sous_categorie_produit'].isin(selected_subcategories)]
 
-    # Apply date range filter from slider
-    filtered_df = filtered_df[(filtered_df['date_publication'] >= start_date) & (filtered_df['date_publication'] <= end_date)]
+    # Filter by risks
+    if selected_risks:
+        filtered_df = filtered_df[filtered_df['risques_encourus'].isin(selected_risks)]
 
-    if subcategories:
-        filtered_df = filtered_df[filtered_df['sous_categorie_produit'].isin(subcategories)]
-    if risks:
-        filtered_df = filtered_df[filtered_df['risques_encourus'].isin(risks)]
+    # Filter by categories
+    if selected_categories:
+        filtered_df = filtered_df[filtered_df['categorie_produit'].isin(selected_categories)]  # Assurez-vous que 'categorie_produit' est le bon nom de colonne
 
+    # Filter by search term
     if search_term:
-        filtered_df = filtered_df[filtered_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
+        filtered_df = filtered_df[filtered_df.apply(
+            lambda row: any(search_term.lower() in str(val).lower() for val in row),
+            axis=1
+        )]
+
+    # Filter by date range
+    filtered_df = filtered_df[(filtered_df['date_publication'] >= selected_dates[0]) & (filtered_df['date_publication'] <= selected_dates[1])]
 
     return filtered_df
 
@@ -410,7 +419,7 @@ def main():
         """)
 
     # --- Page Content ---
-    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates) # Pass selected_dates to filter_data
+    filtered_data = filter_data(df, selected_subcategories, selected_risks, search_term, selected_dates, selected_categories)
 
     if page == "Page principale":
         display_metrics(filtered_data)
