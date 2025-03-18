@@ -656,49 +656,29 @@ def create_tabs(tabs):
 
 def display_recall_card(row):
     """Affiche un rappel dans une carte moderne avec badges pour les risques."""
-    # Déterminer le niveau de risque pour styliser le badge
+    # Préparer les données
     risk_text = str(row.get('risques_encourus', '')).lower()
     risk_level = "high" if any(keyword in risk_text for keyword in ['listeria', 'salmonelle', 'toxique', 'grave']) else \
                 "medium" if any(keyword in risk_text for keyword in ['allergie', 'allergène', 'microbiologique']) else "low"
     
-    # Formatter la date
     formatted_date = row['date_publication'].strftime('%d/%m/%Y') if isinstance(row['date_publication'], date) else 'N/A'
-    
-    # Obtenir l'image ou utiliser un placeholder
     image_url = row.get('liens_vers_les_images', '').split('|')[0] if 'liens_vers_les_images' in row and row['liens_vers_les_images'] else "https://via.placeholder.com/120"
-    
-    # Obtenir le lien vers l'affichette
     pdf_link = row.get('lien_vers_affichette_pdf', '#')
     
-    # Construire le HTML pour la carte
-    risk_badge = f'<div class="risk-badge {risk_level}">{row.get("risques_encourus", "Risque non spécifié")}</div>'
-    recall_description = f"""
-        <strong>Marque:</strong> {row.get('marque_produit', 'N/A')}<br>
-        <strong>Motif:</strong> {row.get('motif_rappel', 'N/A')}
-    """
+    # Au lieu d'utiliser du HTML brut, utilisons les colonnes et composants Streamlit
+    st.markdown(f"**{row.get('modeles_ou_references', 'Produit non spécifié')}**")
+    st.markdown(f"📅 Publié le {formatted_date}")
+    st.markdown(f"**{row.get('risques_encourus', 'Risque non spécifié')}**")
     
-    button_html = f"""
-        <a href="{pdf_link}" target="_blank" class="custom-button">
-            <i>📄</i> Voir l'affichette
-        </a>
-    """
+    # Description sans HTML
+    st.markdown(f"**Marque:** {row.get('marque_produit', 'N/A')}")
+    st.markdown(f"**Motif:** {row.get('motif_rappel', 'N/A')}")
     
-    card_html = f"""
-    <div class="recall-container">
-        <img src="{image_url}" class="recall-image" alt="Image du produit">
-        <div class="recall-content">
-            <div class="recall-title">{row.get('modeles_ou_references', 'Produit non spécifié')}</div>
-            <div class="recall-date">📅 Publié le {formatted_date}</div>
-            {risk_badge}
-            <div class="recall-description">
-                {recall_description}
-            </div>
-            {button_html}
-        </div>
-    </div>
-    """
+    # Bouton natif Streamlit
+    st.markdown(f"[Voir l'affichette]({pdf_link})")
     
-    st.markdown(card_html, unsafe_allow_html=True)
+    # Séparateur
+    st.markdown("---")
 
 def display_recent_recalls_improved(data, start_index=0, items_per_page=6):
     """Affiche les rappels récents avec une présentation améliorée et pagination."""
