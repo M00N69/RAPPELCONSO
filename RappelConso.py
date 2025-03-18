@@ -643,7 +643,7 @@ def display_recent_recalls_improved(data, start_index=0, items_per_page=6):
         if start_index > 0:
             if st.button("← Précédent", key="prev"):
                 st.session_state.start_index = max(0, start_index - items_per_page)
-                st.experimental_rerun()
+                st.rerun()
     
     with col2:
         st.markdown(f'<div class="pagination-info">Affichage {start_index + 1}-{end_index} sur {len(data)}</div>', unsafe_allow_html=True)
@@ -652,7 +652,7 @@ def display_recent_recalls_improved(data, start_index=0, items_per_page=6):
         if end_index < len(data):
             if st.button("Suivant →", key="next"):
                 st.session_state.start_index = start_index + items_per_page
-                st.experimental_rerun()
+                st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1033,7 +1033,7 @@ def create_onboarding_tips():
             
             if st.button("J'ai compris", key="onboarding_button"):
                 st.session_state.onboarding_done = True
-                st.experimental_rerun()
+                st.rerun()
 
 def main():
     # Configuration de l'état de la session pour la pagination et les filtres
