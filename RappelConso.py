@@ -671,23 +671,29 @@ def display_recall_card(row):
     pdf_link = row.get('lien_vers_affichette_pdf', '#')
     
     # Construire le HTML pour la carte
+    risk_badge = f'<div class="risk-badge {risk_level}">{row.get("risques_encourus", "Risque non spécifié")}</div>'
+    recall_description = f"""
+        <strong>Marque:</strong> {row.get('marque_produit', 'N/A')}<br>
+        <strong>Motif:</strong> {row.get('motif_rappel', 'N/A')}
+    """
+    
+    button_html = f"""
+        <a href="{pdf_link}" target="_blank" class="custom-button">
+            <i>📄</i> Voir l'affichette
+        </a>
+    """
+    
     card_html = f"""
     <div class="recall-container">
         <img src="{image_url}" class="recall-image" alt="Image du produit">
         <div class="recall-content">
             <div class="recall-title">{row.get('modeles_ou_references', 'Produit non spécifié')}</div>
             <div class="recall-date">📅 Publié le {formatted_date}</div>
-            
-            <div class="risk-badge {risk_level}">{row.get('risques_encourus', 'Risque non spécifié')}</div>
-            
+            {risk_badge}
             <div class="recall-description">
-                <strong>Marque:</strong> {row.get('marque_produit', 'N/A')}<br>
-                <strong>Motif:</strong> {row.get('motif_rappel', 'N/A')}
+                {recall_description}
             </div>
-            
-            <a href="{pdf_link}" target="_blank" class="custom-button">
-                <i>📄</i> Voir l'affichette
-            </a>
+            {button_html}
         </div>
     </div>
     """
@@ -1295,7 +1301,7 @@ def main():
                     st.session_state.chat_history.append({"role": "assistant", "parts": [response.text]})
                 
                 # Rafraîchir l'UI
-                st.experimental_rerun()
+                st.rerun()
                 
             except Exception as e:
                 st.error(f"Erreur lors de la communication avec l'API: {e}")
