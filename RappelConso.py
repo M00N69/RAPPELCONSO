@@ -478,6 +478,91 @@ START_DATE = date(2022, 1, 1)
 API_PAGE_SIZE = 10000
 API_TIMEOUT_SEC = 30
 
+# --- Fonctions de chargement de données ---
+@st.cache_data(show_spinner=True)
+def load_data(url, start_date=START_DATE):
+    """Loads and preprocesses the recall data from API with date filtering from START_DATE onwards."""
+    all_records = []
+    
+    start_date_str = start_date.strftime('%Y-%m-%d')
+    today_str = date.today().strftime('%Y-%m-%d')
+
+    # Construct base URL with date filter
+    base_url_with_date_filter = f"{url}&refine.date_publication:>={urllib.parse.quote(start_date_str)}&refine.date_publication:<={urllib.parse.quote(today_str)}&refine.categorie_de_produit=Alimentation"
+
+    with st.spinner("Chargement des données (depuis 2022)..."):
+        request_url = base_url_with_date_filter
+        try:
+            response = requests.get(request_url, timeout=API_TIMEOUT_SEC)
+            response.raise_for_status()
+            data = response.json()
+            records = data.get('records')
+
+            if records:
+                all_records.extend([rec['fields'] for rec in records])
+                print(f"Fetched {len(records)} records.")
+            else:
+                print("No records from API.")
+
+        except requests.exceptions.RequestException as e:
+            st.error(f"Erreur de requête API: {e}")
+            print(f"API Request Error: {e}")
+            return pd.DataFrame()
+        except KeyError as e:
+            st.error(f"Erreur de structure JSON de l'API: clé manquante {e}")
+            print(f"JSON Structure Error: Missing key {e}")
+            return pd.DataFrame()
+        except requests.exceptions.Timeout:
+            st.error(f"Délai d'attente dépassé lors de la requête à l'API.")
+            print("API Timeout Error")
+            return pd.DataFrame()
+
+    if not all_records:
+        print("No records loaded in total.")
+        return pd.DataFrame()
+
+    df = pd.DataFrame(all_records)
+    print(f"DataFrame created with {len(df)} rows.")
+
+    # Convert date_de_publication to datetime objects
+    df['date_publication'] = pd.to_datetime(df['date_publication'], errors='coerce').dt.date
+
+    df = df.dropna(subset=['date_publication'])
+    df = df.sort_values(by='date_publication', ascending=False)
+
+    return df
+
+def filter_data(data, selected_subcategories, selected_risks, search_term, selected_dates, selected_categories):
+    """Filters the DataFrame based on the given criteria."""
+    filtered_df = data.copy()
+
+    # Filter by subcategories
+    if selected_subcategories:
+        filtered_df = filtered_df[filtered_df['sous_categorie_produit'].isin(selected_subcategories)]
+
+    # Filter by risks
+    if selected_risks:
+        filtered_df = filtered_df[filtered_df['risques_encourus'].isin(selected_risks)]
+
+    # Filter by categories
+    if selected_categories:
+        filtered_df = filtered_df[filtered_df['categorie_produit'].isin(selected_categories)]
+
+    # Filter by search term
+    if search_term:
+        filtered_df = filtered_df[filtered_df.apply(
+            lambda row: any(search_term.lower() in str(val).lower() for val in row),
+            axis=1
+        )]
+
+    # Filter by date range
+    filtered_df = filtered_df[(filtered_df['date_publication'] >= selected_dates[0]) & (filtered_df['date_publication'] <= selected_dates[1])]
+
+    return filtered_df
+
+def clear_cache():
+    st.cache_data.clear()
+
 # --- Fonctions d'interface utilisateur améliorées ---
 
 def create_header():
