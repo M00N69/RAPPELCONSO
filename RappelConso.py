@@ -656,31 +656,29 @@ def create_tabs(tabs):
 
 def display_recall_card(row):
     """Affiche un rappel dans une carte moderne avec style personnalisé."""
-    col1, col2 = st.columns([1, 3])
+    col_img, col_content = st.columns([1, 3])
     
-    with col1:
+    with col_img:
         # Image du produit
         image_url = row.get('liens_vers_les_images', '').split('|')[0] if 'liens_vers_les_images' in row and row['liens_vers_les_images'] else "https://via.placeholder.com/120"
         st.image(image_url, width=120)
     
-    with col2:
+    with col_content:
         # Informations du produit
         st.markdown(f"#### {row.get('modeles_ou_references', 'Produit non spécifié')}")
         
-        # Date et risque sur la même ligne
-        date_risque_col1, date_risque_col2 = st.columns(2)
-        with date_risque_col1:
-            formatted_date = row['date_publication'].strftime('%d/%m/%Y') if isinstance(row['date_publication'], date) else 'N/A'
-            st.markdown(f"📅 **{formatted_date}**")
-        with date_risque_col2:
-            # Badge de risque coloré selon la gravité
-            risk_text = str(row.get('risques_encourus', '')).lower()
-            if any(keyword in risk_text for keyword in ['listeria', 'salmonelle', 'toxique', 'grave']):
-                st.markdown(f"🔴 **{row.get('risques_encourus', 'Risque non spécifié')}**")
-            elif any(keyword in risk_text for keyword in ['allergie', 'allergène', 'microbiologique']):
-                st.markdown(f"🟠 **{row.get('risques_encourus', 'Risque non spécifié')}**")
-            else:
-                st.markdown(f"🟡 **{row.get('risques_encourus', 'Risque non spécifié')}**")
+        # Date de publication
+        formatted_date = row['date_publication'].strftime('%d/%m/%Y') if isinstance(row['date_publication'], date) else 'N/A'
+        st.markdown(f"📅 **{formatted_date}**")
+        
+        # Badge de risque coloré selon la gravité
+        risk_text = str(row.get('risques_encourus', '')).lower()
+        if any(keyword in risk_text for keyword in ['listeria', 'salmonelle', 'toxique', 'grave']):
+            st.markdown(f"🔴 **{row.get('risques_encourus', 'Risque non spécifié')}**")
+        elif any(keyword in risk_text for keyword in ['allergie', 'allergène', 'microbiologique']):
+            st.markdown(f"🟠 **{row.get('risques_encourus', 'Risque non spécifié')}**")
+        else:
+            st.markdown(f"🟡 **{row.get('risques_encourus', 'Risque non spécifié')}**")
         
         # Marque et motif
         st.markdown(f"**Marque:** {row.get('marque_produit', 'N/A')}")
