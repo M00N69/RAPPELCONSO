@@ -655,29 +655,42 @@ def create_tabs(tabs):
     return st.radio("", tabs, horizontal=True, label_visibility="collapsed")
 
 def display_recall_card(row):
-    """Affiche un rappel dans une carte moderne avec badges pour les risques."""
-    # Préparer les données
-    risk_text = str(row.get('risques_encourus', '')).lower()
-    risk_level = "high" if any(keyword in risk_text for keyword in ['listeria', 'salmonelle', 'toxique', 'grave']) else \
-                "medium" if any(keyword in risk_text for keyword in ['allergie', 'allergène', 'microbiologique']) else "low"
+    """Affiche un rappel dans une carte moderne avec style personnalisé."""
+    col1, col2 = st.columns([1, 3])
     
-    formatted_date = row['date_publication'].strftime('%d/%m/%Y') if isinstance(row['date_publication'], date) else 'N/A'
-    image_url = row.get('liens_vers_les_images', '').split('|')[0] if 'liens_vers_les_images' in row and row['liens_vers_les_images'] else "https://via.placeholder.com/120"
-    pdf_link = row.get('lien_vers_affichette_pdf', '#')
+    with col1:
+        # Image du produit
+        image_url = row.get('liens_vers_les_images', '').split('|')[0] if 'liens_vers_les_images' in row and row['liens_vers_les_images'] else "https://via.placeholder.com/120"
+        st.image(image_url, width=120)
     
-    # Au lieu d'utiliser du HTML brut, utilisons les colonnes et composants Streamlit
-    st.markdown(f"**{row.get('modeles_ou_references', 'Produit non spécifié')}**")
-    st.markdown(f"📅 Publié le {formatted_date}")
-    st.markdown(f"**{row.get('risques_encourus', 'Risque non spécifié')}**")
+    with col2:
+        # Informations du produit
+        st.markdown(f"#### {row.get('modeles_ou_references', 'Produit non spécifié')}")
+        
+        # Date et risque sur la même ligne
+        date_risque_col1, date_risque_col2 = st.columns(2)
+        with date_risque_col1:
+            formatted_date = row['date_publication'].strftime('%d/%m/%Y') if isinstance(row['date_publication'], date) else 'N/A'
+            st.markdown(f"📅 **{formatted_date}**")
+        with date_risque_col2:
+            # Badge de risque coloré selon la gravité
+            risk_text = str(row.get('risques_encourus', '')).lower()
+            if any(keyword in risk_text for keyword in ['listeria', 'salmonelle', 'toxique', 'grave']):
+                st.markdown(f"🔴 **{row.get('risques_encourus', 'Risque non spécifié')}**")
+            elif any(keyword in risk_text for keyword in ['allergie', 'allergène', 'microbiologique']):
+                st.markdown(f"🟠 **{row.get('risques_encourus', 'Risque non spécifié')}**")
+            else:
+                st.markdown(f"🟡 **{row.get('risques_encourus', 'Risque non spécifié')}**")
+        
+        # Marque et motif
+        st.markdown(f"**Marque:** {row.get('marque_produit', 'N/A')}")
+        st.markdown(f"**Motif:** {row.get('motif_rappel', 'N/A')}")
+        
+        # Bouton pour l'affichette
+        pdf_link = row.get('lien_vers_affichette_pdf', '#')
+        st.markdown(f"[📄 Voir l'affichette]({pdf_link})")
     
-    # Description sans HTML
-    st.markdown(f"**Marque:** {row.get('marque_produit', 'N/A')}")
-    st.markdown(f"**Motif:** {row.get('motif_rappel', 'N/A')}")
-    
-    # Bouton natif Streamlit
-    st.markdown(f"[Voir l'affichette]({pdf_link})")
-    
-    # Séparateur
+    # Ligne de séparation entre les rappels
     st.markdown("---")
 
 def display_recent_recalls_improved(data, start_index=0, items_per_page=6):
