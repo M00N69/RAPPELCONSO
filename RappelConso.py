@@ -102,7 +102,7 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
 
     # Filter by search term in a specific column
     if search_term and search_column and search_column in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df[search_column].str.contains(search_term, case=False, na=False)]
+        filtered_df = filtered_df[filtered_df[search_column].astype(str).str.contains(search_term, case=False, na=False)]
     elif search_term:
         filtered_df = filtered_df[filtered_df.apply(
             lambda row: any(search_term.lower() in str(val).lower() for val in row),
@@ -129,15 +129,6 @@ def create_header():
 
 def create_search_bar(placeholder="Rechercher par nom, marque, référence..."):
     """Crée une barre de recherche moderne avec icône."""
-    st.markdown("""
-    <div class="search-container">
-        <i class="search-icon">🔍</i>
-        <input type="text" id="search-input" class="search-input" placeholder="{placeholder}">
-    </div>
-    """.format(placeholder=placeholder), unsafe_allow_html=True)
-
-    # Comme Streamlit ne prend pas en charge les éléments HTML personnalisés directement,
-    # on utilise un widget Streamlit standard pour la logique
     return st.text_input("", placeholder=placeholder, label_visibility="collapsed")
 
 def display_metrics_cards(data):
@@ -155,7 +146,6 @@ def display_metrics_cards(data):
     recent_recalls = len(data[data['date_publication'] >= thirty_days_ago])
 
     # Calculer le pourcentage de risques graves
-    # Supposons que les risques contenant certains mots-clés sont considérés comme graves
     grave_keywords = ['microbiologique', 'listeria', 'salmonelle', 'allergie', 'allergène', 'toxique']
     severe_risks = data[data['risques_encourus'].str.lower().str.contains('|'.join(grave_keywords), na=False)]
     severe_percent = int((len(severe_risks) / total_recalls) * 100) if total_recalls > 0 else 0
