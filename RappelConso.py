@@ -101,7 +101,7 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
         filtered_df = filtered_df[filtered_df['categorie_produit'].isin(selected_categories)]
 
     # Filter by search term in a specific column
-    if search_term and search_column:
+    if search_term and search_column and search_column in filtered_df.columns:
         filtered_df = filtered_df[filtered_df[search_column].str.contains(search_term, case=False, na=False)]
     elif search_term:
         filtered_df = filtered_df[filtered_df.apply(
@@ -120,10 +120,9 @@ def clear_cache():
 # --- Fonctions d'interface utilisateur améliorées ---
 
 def create_header():
-    """Crée un header moderne avec logo et titre."""
+    """Crée un header moderne avec titre."""
     st.markdown("""
     <div class="header-container">
-        <img src="https://raw.githubusercontent.com/M00N69/RAPPELCONSO/main/logo%2004%20copie.jpg" alt="RappelConso Logo" class="header-logo">
         <h1 class="header-title">RappelConso - Surveillance des Alertes Alimentaires</h1>
     </div>
     """, unsafe_allow_html=True)
