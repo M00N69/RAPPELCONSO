@@ -727,8 +727,13 @@ def main():
 
     # --- Contenu principal selon la page sélectionnée ---
     if page == "Tableau de bord":
+        # Sélecteur de colonne pour la recherche
+        search_column = st.selectbox("Choisissez la colonne à rechercher",
+                                     options=["motif", "description complémentaire", "risque", "Toutes les colonnes"],
+                                     index=3)
+
         # Filtrer les données selon le terme de recherche
-        filtered_data = filter_data(df, [], [], search_term, (START_DATE, date.today()), [])
+        filtered_data = filter_data(df, [], [], search_term, (START_DATE, date.today()), [], search_column if search_column != "Toutes les colonnes" else None)
 
         # Afficher les métriques améliorées
         display_metrics_cards(filtered_data)
@@ -770,16 +775,11 @@ def main():
     elif page == "Détails":
         st.subheader("Détails des rappels")
 
-        # Sélecteur de colonne pour la recherche
-        search_column = st.selectbox("Choisissez la colonne à rechercher",
-                                     options=["motif", "description complémentaire", "risque", "Toutes les colonnes"],
-                                     index=3)
-
         # Filtres avancés
         categories, subcategories, risks, dates = create_advanced_filters(df)
 
         # Filtrer les données
-        filtered_data = filter_data(df, subcategories, risks, search_term, dates, categories, search_column if search_column != "Toutes les colonnes" else None)
+        filtered_data = filter_data(df, subcategories, risks, search_term, dates, categories)
 
         if not filtered_data.empty:
             # Afficher les données sous forme de tableau interactif
