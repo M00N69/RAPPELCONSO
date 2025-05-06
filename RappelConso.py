@@ -103,11 +103,6 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
     # Filter by search term in a specific column
     if search_term and search_column and search_column in filtered_df.columns:
         filtered_df = filtered_df[filtered_df[search_column].astype(str).str.contains(search_term, case=False, na=False)]
-    elif search_term:
-        filtered_df = filtered_df[filtered_df.apply(
-            lambda row: any(search_term.lower() in str(val).lower() for val in row),
-            axis=1
-        )]
 
     # Filter by date range
     filtered_df = filtered_df[(filtered_df['date_publication'] >= selected_dates[0]) & (filtered_df['date_publication'] <= selected_dates[1])]
