@@ -111,15 +111,26 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
         filtered_df = filtered_df[filtered_df['categorie_produit'].isin(selected_categories)]
 
     # Filter by search term in a specific column
-    if search_term and search_column and search_column in COLUMN_MAPPING:
-        actual_column = COLUMN_MAPPING[search_column]
-        st.write(f"Filtrage par colonne: {actual_column} avec le terme: {search_term}")
-        filtered_df = filtered_df[filtered_df[actual_column].astype(str).str.contains(search_term, case=False, na=False)]
-    elif search_term:
-        filtered_df = filtered_df[filtered_df.apply(
-            lambda row: any(search_term.lower() in str(val).lower() for val in row),
-            axis=1
-        )]
+    if search_term:
+        if search_column and search_column != "Toutes les colonnes":
+            # Utiliser le mapping pour obtenir le nom réel de la colonne
+            real_column_name = COLUMN_MAPPING.get(search_column)
+
+            if real_column_name and real_column_name in filtered_df.columns:
+                st.write(f"Filtrage par colonne: {search_column} ({real_column_name}) avec le terme: {search_term}")
+                filtered_df = filtered_df[filtered_df[real_column_name].astype(str).str.contains(search_term, case=False, na=False)]
+            else:
+                st.warning(f"La colonne {search_column} n'a pas été trouvée dans les données. Recherche dans toutes les colonnes à la place.")
+                filtered_df = filtered_df[filtered_df.apply(
+                    lambda row: any(search_term.lower() in str(val).lower() for val in row),
+                    axis=1
+                )]
+        else:
+            # Recherche dans toutes les colonnes
+            filtered_df = filtered_df[filtered_df.apply(
+                lambda row: any(search_term.lower() in str(val).lower() for val in row),
+                axis=1
+            )]
 
     # Filter by date range
     filtered_df = filtered_df[(filtered_df['date_publication'] >= selected_dates[0]) & (filtered_df['date_publication'] <= selected_dates[1])]
