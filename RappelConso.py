@@ -95,9 +95,6 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
     """Filters the DataFrame based on the given criteria."""
     filtered_df = data.copy()
 
-    # Debug: Show available columns
-    st.write("Colonnes disponibles :", data.columns)
-
     # Filter by subcategories
     if selected_subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_produit'].isin(selected_subcategories)]
@@ -117,10 +114,9 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
             real_column_name = COLUMN_MAPPING.get(search_column)
 
             if real_column_name and real_column_name in filtered_df.columns:
-                st.write(f"Filtrage par colonne: {search_column} ({real_column_name}) avec le terme: {search_term}")
                 filtered_df = filtered_df[filtered_df[real_column_name].astype(str).str.contains(search_term, case=False, na=False)]
             else:
-                st.warning(f"La colonne {search_column} n'a pas été trouvée dans les données. Recherche dans toutes les colonnes à la place.")
+                st.warning(f"La recherche a été effectuée dans toutes les colonnes.")
                 filtered_df = filtered_df[filtered_df.apply(
                     lambda row: any(search_term.lower() in str(val).lower() for val in row),
                     axis=1
@@ -134,9 +130,6 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
 
     # Filter by date range
     filtered_df = filtered_df[(filtered_df['date_publication'] >= selected_dates[0]) & (filtered_df['date_publication'] <= selected_dates[1])]
-
-    # Debug: Show the number of results after filtering
-    st.write(f"Nombre de résultats après filtrage: {len(filtered_df)}")
 
     return filtered_df
 
