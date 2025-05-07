@@ -4,3 +4,7 @@ plotly
 requests
 python-dateutil
 google-generativeai
+numpy
+matplotlib
+scikit-learn
+groq
