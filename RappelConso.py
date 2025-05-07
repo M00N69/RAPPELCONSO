@@ -334,13 +334,17 @@ API_TO_FRIENDLY_COLUMN_MAPPING = {v: k for k, v in FRIENDLY_TO_API_COLUMN_MAPPIN
 def load_data(api_base_url, start_date_filter=START_DATE):
     all_records = []
     start_date_str = start_date_filter.strftime('%Y-%m-%d')
-    
+    # today_str = date.today().strftime('%Y-%m-%d') # Pas nécessaire pour la date de fin avec refine
+
+    # CORRECTION: Utilisation de refine.date_publication comme dans le code original fonctionnel
+    # et construction des query_params de manière plus modulaire.
     query_params_base = {
         "dataset": "rappelconso-v2-gtin-espaces",
-        "q": f"date_publication:>={start_date_str}", # CORRECTION: guillemets simples retirés
         "rows": 1000, 
-        "facet": "categorie_de_produit",
-        "refine.categorie_de_produit": "Alimentation"
+        "facet": "categorie_de_produit", # Utile pour les statistiques de l'API
+        "refine.categorie_de_produit": "Alimentation",
+        "refine.date_publication": f">={start_date_str}" 
+        # On pourrait aussi ajouter "<={today_str}" mais l'API semble le faire par défaut
     }
     
     current_start_row = 0
@@ -349,6 +353,10 @@ def load_data(api_base_url, start_date_filter=START_DATE):
     while True:
         query_params = query_params_base.copy()
         query_params["start"] = current_start_row
+        
+        # Le paramètre 'q' peut rester vide ou être utilisé pour d'autres recherches textuelles si besoin.
+        # Pour l'instant, on le laisse vide car les filtres principaux sont gérés par 'refine'.
+        query_params["q"] = "" 
         
         request_url = f"{api_base_url}?{urllib.parse.urlencode(query_params)}"
         
@@ -442,23 +450,21 @@ def filter_data(data_df, selected_subcategories, selected_risks, search_term, se
         if isinstance(start_filter_date, datetime): start_filter_date = start_filter_date.date()
         if isinstance(end_filter_date, datetime): end_filter_date = end_filter_date.date()
         
-        # Conversion robuste en date si nécessaire
         if not isinstance(filtered_df['date_publication'].iloc[0], date):
             try:
-                # Tenter la conversion, et filtrer les NA potentiels créés
                 temp_dates = pd.to_datetime(filtered_df['date_publication'], errors='coerce').dt.date
                 valid_dates_mask = ~temp_dates.isna()
                 filtered_df = filtered_df[valid_dates_mask]
-                temp_dates = temp_dates[valid_dates_mask] # Garder seulement les dates valides pour le filtrage
+                temp_dates = temp_dates[valid_dates_mask]
                 
-                if not temp_dates.empty: # S'assurer qu'il reste des dates valides
+                if not temp_dates.empty:
                     filtered_df = filtered_df[
                         (temp_dates >= start_filter_date) &
                         (temp_dates <= end_filter_date)
                     ]
-            except Exception: # En cas d'échec de conversion majeur
+            except Exception:
                  st.warning("Format de date inattendu dans 'date_publication', le filtre de date pourrait être incomplet.")
-        else: # Si c'est déjà des objets date
+        else:
             filtered_df = filtered_df[
                 (filtered_df['date_publication'] >= start_filter_date) &
                 (filtered_df['date_publication'] <= end_filter_date)
@@ -491,7 +497,7 @@ def display_metrics_cards(data_df):
     if 'date_publication' in data_df.columns and not data_df.empty:
         if not isinstance(data_df['date_publication'].iloc[0], date):
             temp_dates = pd.to_datetime(data_df['date_publication'], errors='coerce').dt.date
-            recent_recalls = len(data_df[~temp_dates.isna() & (temp_dates >= days_ago)]) # Gérer les NaNs après conversion
+            recent_recalls = len(data_df[~temp_dates.isna() & (temp_dates >= days_ago)])
         else:
             recent_recalls = len(data_df[data_df['date_publication'] >= days_ago])
 
@@ -621,7 +627,6 @@ def display_paginated_recalls(data_df, items_per_page_setting):
                 st.rerun()
 
 def create_advanced_filters(df_full_data):
-    # S'assurer que les dates de session sont initialisées avant de les utiliser
     min_date_data = df_full_data['date_publication'].min() if not df_full_data.empty else START_DATE
     max_date_data = date.today()
 
@@ -630,12 +635,10 @@ def create_advanced_filters(df_full_data):
     if 'date_filter_end' not in st.session_state:
         st.session_state.date_filter_end = max_date_data
     
-    # Convertir en objet date si ce sont des datetime (peut arriver avec la session)
     if isinstance(st.session_state.date_filter_start, datetime):
         st.session_state.date_filter_start = st.session_state.date_filter_start.date()
     if isinstance(st.session_state.date_filter_end, datetime):
         st.session_state.date_filter_end = st.session_state.date_filter_end.date()
-
 
     with st.expander("🔍 Filtres avancés et Options d'affichage", expanded=False):
         col1, col2 = st.columns(2)
@@ -681,7 +684,7 @@ def create_advanced_filters(df_full_data):
             
             selected_dates_tuple_local = st.date_input(
                 "Filtrer par période de publication:",
-                value=(st.session_state.date_filter_start, st.session_state.date_filter_end), # Utiliser les dates de session
+                value=(st.session_state.date_filter_start, st.session_state.date_filter_end),
                 min_value=min_date_data, max_value=max_date_data,
                 key="date_range_picker_adv"
             )
@@ -689,7 +692,6 @@ def create_advanced_filters(df_full_data):
                 st.session_state.date_filter_start, st.session_state.date_filter_end = selected_dates_tuple_local
             else: 
                 selected_dates_tuple_local = (st.session_state.date_filter_start, st.session_state.date_filter_end)
-
 
         st.markdown("---")
         st.markdown("**Options d'affichage**")
@@ -712,10 +714,9 @@ def create_advanced_filters(df_full_data):
                 'date_filter_start', 'date_filter_end', 
                 'items_per_page_filter', 'recent_days_filter', 'current_page_recalls'
             ]
-            for key_to_del in keys_to_reset: # Utiliser un nom différent pour la variable de boucle
+            for key_to_del in keys_to_reset:
                 if key_to_del in st.session_state: del st.session_state[key_to_del]
             
-            # Réinitialiser explicitement aux valeurs par défaut
             st.session_state.date_filter_start = df_full_data['date_publication'].min() if not df_full_data.empty else START_DATE
             st.session_state.date_filter_end = date.today()
             st.session_state.items_per_page_filter = DEFAULT_ITEMS_PER_PAGE
@@ -761,12 +762,11 @@ def create_improved_visualizations(data_df_viz):
         if not pd.api.types.is_datetime64_any_dtype(data_df_viz['date_publication']) and not isinstance(data_df_viz['date_publication'].iloc[0], date):
              data_df_viz['date_publication_dt'] = pd.to_datetime(data_df_viz['date_publication'], errors='coerce')
         elif isinstance(data_df_viz['date_publication'].iloc[0], date) and not pd.api.types.is_datetime64_any_dtype(data_df_viz['date_publication']):
-            data_df_viz['date_publication_dt'] = pd.to_datetime(data_df_viz['date_publication']) # Convertir les objets date en datetime64 pour resample
-        else: # C'est déjà des datetime64
+            data_df_viz['date_publication_dt'] = pd.to_datetime(data_df_viz['date_publication'])
+        else: 
              data_df_viz['date_publication_dt'] = data_df_viz['date_publication']
-        # Supprimer les lignes où la conversion a échoué
         data_df_viz = data_df_viz.dropna(subset=['date_publication_dt'])
-        if data_df_viz.empty: # Si toutes les dates étaient invalides
+        if data_df_viz.empty:
             st.warning("Dates invalides dans les données, impossible de générer les visualisations temporelles.")
             st.markdown('</div>', unsafe_allow_html=True)
             return
@@ -920,7 +920,6 @@ def prepare_context_for_ia(df_context, max_items=10):
         'risques_encourus', 'motif_du_rappel', 'date_publication', 'distributeurs'
     ]
     cols_to_use = [col for col in cols_for_ia if col in df_context.columns]
-    # S'assurer que max_items ne dépasse pas la taille du DataFrame
     actual_max_items = min(max_items, len(df_context))
     context_df_sample = df_context[cols_to_use].head(actual_max_items)
     
@@ -959,18 +958,17 @@ def prepare_context_for_ia(df_context, max_items=10):
             
     return text_context
 
-def analyze_trends_data(df_analysis, product_type=None, risk_type=None, time_period="12m"): # time_period non utilisé pour l'instant
+def analyze_trends_data(df_analysis, product_type=None, risk_type=None, time_period="12m"):
     if df_analysis.empty:
         return {"status": "no_data", "message": "Aucune donnée disponible pour l'analyse de tendance."}
 
     df_filtered = df_analysis.copy()
     if 'date_publication' in df_filtered.columns:
-        # Conversion robuste en datetime64
         if not pd.api.types.is_datetime64_any_dtype(df_filtered['date_publication']):
             df_filtered['date_publication_dt'] = pd.to_datetime(df_filtered['date_publication'], errors='coerce')
-        elif isinstance(df_filtered['date_publication'].iloc[0], date): # Si c'est des objets date
+        elif isinstance(df_filtered['date_publication'].iloc[0], date):
             df_filtered['date_publication_dt'] = pd.to_datetime(df_filtered['date_publication'])
-        else: # C'est déjà datetime64
+        else: 
             df_filtered['date_publication_dt'] = df_filtered['date_publication']
         df_filtered = df_filtered.dropna(subset=['date_publication_dt'])
         if df_filtered.empty: return {"status": "no_data", "message": "Dates invalides pour l'analyse."}
@@ -1092,7 +1090,6 @@ def ask_groq_ai(client, user_query, context_data_text, trend_analysis_results=No
             max_tokens=st.session_state.get("groq_max_tokens", 1024),
         )
         response_content = chat_completion.choices[0].message.content
-        # Mise en gras des nombres (peut être affinée)
         response_content = re.sub(r'(\b\d{1,3}(?:[,.]\d{1,2})?\b)(?!%|[-\w])', r'**\1**', response_content) 
         return response_content
     except Exception as e:
@@ -1106,7 +1103,7 @@ def ask_groq_ai(client, user_query, context_data_text, trend_analysis_results=No
 def main():
     create_header()
     
-    st.sidebar.image(LOGO_URL, use_container_width=True) # CORRIGÉ
+    st.sidebar.image(LOGO_URL, use_container_width=True) 
     st.sidebar.title("Navigation & Options")
     
     groq_ready = manage_groq_api_key()
@@ -1233,17 +1230,17 @@ def main():
                     trend_analysis_needed = False
                     trend_product, trend_risk = None, None
 
-                    if query_to_process in suggestion_queries: # Si c'est une suggestion cliquée
+                    if query_to_process in suggestion_queries: 
                         params = suggestion_queries[query_to_process]
                         if params.get("type") == "trend": trend_analysis_needed = True
                         trend_product = params.get("product")
                         trend_risk = params.get("risk")
                     elif any(k in query_to_process.lower() for k in ["tendance", "évolution", "statistique", "analyse de", "combien de rappel"]):
                         trend_analysis_needed = True
-                        # Simple extraction de mots-clés pour produit/risque (peut être améliorée)
                         if "fromage" in query_to_process.lower(): trend_product = "fromage"
                         if "listeria" in query_to_process.lower(): trend_risk = "listeria"
-                        # ... ajouter d'autres mots-clés si besoin ...
+                        if "viande" in query_to_process.lower(): trend_product = "viande"
+                        if "bio" in query_to_process.lower(): trend_product = "bio"
                     
                     trend_results = None
                     if trend_analysis_needed:
@@ -1259,7 +1256,6 @@ def main():
                 st.rerun()
 
     st.sidebar.markdown("---")
-    # Utiliser st.session_state.date_filter_start pour être sûr d'avoir la date la plus à jour du filtre
     start_date_display = st.session_state.get('date_filter_start', START_DATE)
     st.sidebar.caption(f"Données RappelConso 'Alimentation'. {len(df_alim)} rappels depuis {start_date_display.strftime('%d/%m/%Y')}.")
     if st.sidebar.button("🔄 Mettre à jour les données", type="primary", use_container_width=True, key="update_data_btn"):
