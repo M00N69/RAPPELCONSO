@@ -88,6 +88,9 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
     """Filters the DataFrame based on the given criteria."""
     filtered_df = data.copy()
 
+    # Debug: Show available columns
+    st.write("Colonnes disponibles :", data.columns)
+
     # Filter by subcategories
     if selected_subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_produit'].isin(selected_subcategories)]
@@ -102,6 +105,7 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
 
     # Filter by search term in a specific column
     if search_term and search_column and search_column in filtered_df.columns:
+        st.write(f"Filtrage par colonne: {search_column} avec le terme: {search_term}")
         filtered_df = filtered_df[filtered_df[search_column].astype(str).str.contains(search_term, case=False, na=False)]
     elif search_term:
         filtered_df = filtered_df[filtered_df.apply(
@@ -111,6 +115,9 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
 
     # Filter by date range
     filtered_df = filtered_df[(filtered_df['date_publication'] >= selected_dates[0]) & (filtered_df['date_publication'] <= selected_dates[1])]
+
+    # Debug: Show the number of results after filtering
+    st.write(f"Nombre de résultats après filtrage: {len(filtered_df)}")
 
     return filtered_df
 
