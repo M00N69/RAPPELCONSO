@@ -30,6 +30,13 @@ START_DATE = date(2022, 1, 1)
 API_PAGE_SIZE = 10000
 API_TIMEOUT_SEC = 30
 
+# Mapping des colonnes
+COLUMN_MAPPING = {
+    "motif": "motif_rappel",
+    "description complémentaire": "description_complementaire_risque",
+    "risque": "risques_encourus"
+}
+
 # --- Fonctions de chargement de données ---
 @st.cache_data(show_spinner=True)
 def load_data(url, start_date=START_DATE):
@@ -104,9 +111,10 @@ def filter_data(data, selected_subcategories, selected_risks, search_term, selec
         filtered_df = filtered_df[filtered_df['categorie_produit'].isin(selected_categories)]
 
     # Filter by search term in a specific column
-    if search_term and search_column and search_column in filtered_df.columns:
-        st.write(f"Filtrage par colonne: {search_column} avec le terme: {search_term}")
-        filtered_df = filtered_df[filtered_df[search_column].astype(str).str.contains(search_term, case=False, na=False)]
+    if search_term and search_column and search_column in COLUMN_MAPPING:
+        actual_column = COLUMN_MAPPING[search_column]
+        st.write(f"Filtrage par colonne: {actual_column} avec le terme: {search_term}")
+        filtered_df = filtered_df[filtered_df[actual_column].astype(str).str.contains(search_term, case=False, na=False)]
     elif search_term:
         filtered_df = filtered_df[filtered_df.apply(
             lambda row: any(search_term.lower() in str(val).lower() for val in row),
@@ -726,8 +734,8 @@ def main():
     if page == "Tableau de bord":
         # Sélecteur de colonne pour la recherche
         search_column = st.selectbox("Choisissez la colonne à rechercher",
-                                     options=["motif", "description complémentaire", "risque", "Toutes les colonnes"],
-                                     index=3)
+                                     options=list(COLUMN_MAPPING.keys()),
+                                     index=0)
 
         # Filtrer les données selon le terme de recherche
         filtered_data = filter_data(df, [], [], search_term, (START_DATE, date.today()), [], search_column if search_column != "Toutes les colonnes" else None)
