@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS (identique à la version précédente, mais inclus ici pour être complet)
+# CSS
 st.markdown("""
     <style>
         /* --- Base & Global Styles --- */
@@ -223,10 +223,9 @@ st.markdown("""
         }
         .stChatMessage { 
             border-radius: 15px !important; 
-            max-width: 85% !important; /* Augmenté un peu pour les réponses IA */
+            max-width: 85% !important; 
             box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
         }
-        /* Ciblage plus précis pour éviter d'affecter d'autres éléments */
         .stChatMessage > div[data-testid="stChatMessageContent"] {
             border-radius: 15px !important;
         }
@@ -235,24 +234,22 @@ st.markdown("""
              background-color: #0072C6 !important;
              color: white !important;
              border-bottom-right-radius: 5px !important;
-             border-bottom-left-radius: 15px !important; /* Garder arrondi */
-             border-top-left-radius: 15px !important; /* Garder arrondi */
-             border-top-right-radius: 15px !important; /* Garder arrondi */
+             border-bottom-left-radius: 15px !important; 
+             border-top-left-radius: 15px !important; 
+             border-top-right-radius: 15px !important; 
         }
         .stChatMessage[data-testid="chatAvatarIcon-assistant"] + div .stChatMessageContent {
             background-color: #e9ecef !important;
             color: #333 !important;
             border-bottom-left-radius: 5px !important;
-            border-bottom-right-radius: 15px !important; /* Garder arrondi */
-            border-top-left-radius: 15px !important; /* Garder arrondi */
-            border-top-right-radius: 15px !important; /* Garder arrondi */
+            border-bottom-right-radius: 15px !important; 
+            border-top-left-radius: 15px !important; 
+            border-top-right-radius: 15px !important; 
         }
-        /* Pour que les images dans le chat ne dépassent pas */
         .stChatMessage img {
             max-width: 100%;
             border-radius: 7px;
         }
-
 
         .stTextArea textarea {
             border-radius: 8px;
@@ -275,15 +272,14 @@ st.markdown("""
             color: #0072C6;
             border: 1px solid #cce7ff;
             font-size: 0.9em;
-            font-weight: 500; /* Un peu moins gras */
-            padding: 0.4em 0.8em; /* Ajuster padding */
+            font-weight: 500; 
+            padding: 0.4em 0.8em; 
         }
         .suggestion-button-container .stButton button:hover {
             background-color: #cce7ff;
             border-color: #00A0E0;
-            transform: translateY(-1px); /* Effet hover plus subtil */
+            transform: translateY(-1px); 
         }
-
 
         /* --- Animations --- */
         @keyframes fadeInDown {
@@ -306,7 +302,7 @@ st.markdown("""
             .metric-label { font-size: 0.9em; }
             .stTabs [data-baseweb="tab"] { font-size: 0.9em; padding: 8px 10px;}
             .main .block-container { padding-left: 0.5rem; padding-right: 0.5rem;}
-            .stChatMessage { max-width: 95% !important; } /* Plus large sur mobile */
+            .stChatMessage { max-width: 95% !important; } 
         }
     </style>
 """, unsafe_allow_html=True)
@@ -317,12 +313,9 @@ START_DATE = date(2022, 1, 1)
 API_TIMEOUT_SEC = 30
 DEFAULT_ITEMS_PER_PAGE = 6
 DEFAULT_RECENT_DAYS = 30
-# Logo URL (remplacez par votre URL de logo si vous en avez un)
 LOGO_URL = "https://raw.githubusercontent.com/M00N69/RAPPELCONSO/main/logo%2004%20copie.jpg"
 
 
-# Mapping des noms conviviaux vers les noms de colonnes API
-# Utilisé pour les sélecteurs de colonnes et potentiellement l'affichage
 FRIENDLY_TO_API_COLUMN_MAPPING = {
     "Motif du rappel": "motif_du_rappel",
     "Risques encourus": "risques_encourus",
@@ -333,19 +326,18 @@ FRIENDLY_TO_API_COLUMN_MAPPING = {
     "Catégorie principale": "categorie_de_produit",
     "Sous-catégorie": "sous_categorie_de_produit"
 }
-# Inverser pour obtenir API vers Convivial si nécessaire
 API_TO_FRIENDLY_COLUMN_MAPPING = {v: k for k, v in FRIENDLY_TO_API_COLUMN_MAPPING.items()}
 
 
 # --- Fonctions de chargement de données ---
-@st.cache_data(show_spinner="Chargement des données RappelConso...", ttl=3600) # Cache pour 1h
+@st.cache_data(show_spinner="Chargement des données RappelConso...", ttl=3600)
 def load_data(api_base_url, start_date_filter=START_DATE):
     all_records = []
     start_date_str = start_date_filter.strftime('%Y-%m-%d')
     
     query_params_base = {
         "dataset": "rappelconso-v2-gtin-espaces",
-        "q": f"date_publication:>='{start_date_str}'",
+        "q": f"date_publication:>={start_date_str}", # CORRECTION: guillemets simples retirés
         "rows": 1000, 
         "facet": "categorie_de_produit",
         "refine.categorie_de_produit": "Alimentation"
@@ -354,8 +346,6 @@ def load_data(api_base_url, start_date_filter=START_DATE):
     current_start_row = 0
     total_hits_estimate = 0 
 
-    # Le spinner est géré par @st.cache_data
-    # with st.spinner(f"Chargement des données 'Alimentation' depuis {start_date_filter.strftime('%d/%m/%Y')}..."):
     while True:
         query_params = query_params_base.copy()
         query_params["start"] = current_start_row
@@ -374,13 +364,12 @@ def load_data(api_base_url, start_date_filter=START_DATE):
 
             if records:
                 all_records.extend([rec['fields'] for rec in records])
-                if total_hits_estimate > 0: # Afficher la progression si on a une estimation
+                if total_hits_estimate > 0: 
                     st.toast(f"{len(all_records)}/{total_hits_estimate} rappels chargés...", icon="⏳")
                 else:
                     st.toast(f"{len(all_records)} rappels chargés...", icon="⏳")
 
                 current_start_row += len(records)
-                # Condition d'arrêt: si on a récupéré autant ou plus que l'estimation, OU si l'API retourne moins que demandé
                 if (total_hits_estimate > 0 and len(all_records) >= total_hits_estimate) or len(records) < query_params_base["rows"]:
                     break 
             else:
@@ -388,6 +377,10 @@ def load_data(api_base_url, start_date_filter=START_DATE):
             
             time.sleep(0.05) 
 
+        except requests.exceptions.HTTPError as http_err:
+            st.error(f"Erreur HTTP de l'API: {http_err}")
+            st.error(f"URL de la requête ayant échoué: {request_url}")
+            return pd.DataFrame()
         except requests.exceptions.RequestException as e:
             st.error(f"Erreur de requête API: {e}")
             return pd.DataFrame()
@@ -408,32 +401,28 @@ def load_data(api_base_url, start_date_filter=START_DATE):
     df = df.dropna(subset=['date_publication'])
     df = df.sort_values(by='date_publication', ascending=False).reset_index(drop=True)
 
-    # S'assurer que les colonnes clés (celles du mapping API) existent, sinon les créer vides
     for api_col_name in FRIENDLY_TO_API_COLUMN_MAPPING.values():
         if api_col_name not in df.columns:
-            df[api_col_name] = pd.NA # ou "" selon le type attendu
+            df[api_col_name] = pd.NA
     return df
 
 def filter_data(data_df, selected_subcategories, selected_risks, search_term, selected_dates_tuple, selected_categories, search_column_api_name=None):
     filtered_df = data_df.copy()
 
-    # Filtres multiselect
-    if selected_categories: # API: categorie_de_produit
+    if selected_categories:
         filtered_df = filtered_df[filtered_df['categorie_de_produit'].isin(selected_categories)]
-    if selected_subcategories: # API: sous_categorie_de_produit
+    if selected_subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(selected_subcategories)]
-    if selected_risks: # API: risques_encourus
+    if selected_risks:
         if 'risques_encourus' in filtered_df.columns:
             filtered_df = filtered_df[filtered_df['risques_encourus'].fillna('').isin(selected_risks)]
 
-    # Filtre par terme de recherche
     if search_term:
         search_term_lower = search_term.lower()
         if search_column_api_name and search_column_api_name in filtered_df.columns:
             col_as_str = filtered_df[search_column_api_name].fillna('').astype(str)
             filtered_df = filtered_df[col_as_str.str.lower().str.contains(search_term_lower)]
         else:
-            # Colonnes API pertinentes pour une recherche globale
             cols_to_search_api = [
                 'nom_de_la_marque_du_produit', 'nom_commercial', 'modeles_ou_references',
                 'risques_encourus', 'motif_du_rappel', 'sous_categorie_de_produit',
@@ -441,29 +430,35 @@ def filter_data(data_df, selected_subcategories, selected_risks, search_term, se
             ]
             cols_to_search_api = [col for col in cols_to_search_api if col in filtered_df.columns]
 
-            if cols_to_search_api: # S'il y a des colonnes où chercher
+            if cols_to_search_api:
                 mask = filtered_df[cols_to_search_api].fillna('').astype(str).apply(
                     lambda x: x.str.lower().str.contains(search_term_lower)
                 ).any(axis=1)
                 filtered_df = filtered_df[mask]
 
-    # Filtre par date
     if 'date_publication' in filtered_df.columns and not filtered_df['date_publication'].empty:
-        # S'assurer que les objets date sont comparés
         start_filter_date = selected_dates_tuple[0]
         end_filter_date = selected_dates_tuple[1]
         if isinstance(start_filter_date, datetime): start_filter_date = start_filter_date.date()
         if isinstance(end_filter_date, datetime): end_filter_date = end_filter_date.date()
         
-        # Vérifier que la colonne date_publication contient bien des objets date
+        # Conversion robuste en date si nécessaire
         if not isinstance(filtered_df['date_publication'].iloc[0], date):
-            temp_dates = pd.to_datetime(filtered_df['date_publication'], errors='coerce').dt.date
-            filtered_df = filtered_df[~temp_dates.isna()] # Retirer les dates invalides après conversion
-            filtered_df = filtered_df[
-                (temp_dates >= start_filter_date) &
-                (temp_dates <= end_filter_date)
-            ]
-        else:
+            try:
+                # Tenter la conversion, et filtrer les NA potentiels créés
+                temp_dates = pd.to_datetime(filtered_df['date_publication'], errors='coerce').dt.date
+                valid_dates_mask = ~temp_dates.isna()
+                filtered_df = filtered_df[valid_dates_mask]
+                temp_dates = temp_dates[valid_dates_mask] # Garder seulement les dates valides pour le filtrage
+                
+                if not temp_dates.empty: # S'assurer qu'il reste des dates valides
+                    filtered_df = filtered_df[
+                        (temp_dates >= start_filter_date) &
+                        (temp_dates <= end_filter_date)
+                    ]
+            except Exception: # En cas d'échec de conversion majeur
+                 st.warning("Format de date inattendu dans 'date_publication', le filtre de date pourrait être incomplet.")
+        else: # Si c'est déjà des objets date
             filtered_df = filtered_df[
                 (filtered_df['date_publication'] >= start_filter_date) &
                 (filtered_df['date_publication'] <= end_filter_date)
@@ -496,7 +491,7 @@ def display_metrics_cards(data_df):
     if 'date_publication' in data_df.columns and not data_df.empty:
         if not isinstance(data_df['date_publication'].iloc[0], date):
             temp_dates = pd.to_datetime(data_df['date_publication'], errors='coerce').dt.date
-            recent_recalls = len(data_df[temp_dates >= days_ago])
+            recent_recalls = len(data_df[~temp_dates.isna() & (temp_dates >= days_ago)]) # Gérer les NaNs après conversion
         else:
             recent_recalls = len(data_df[data_df['date_publication'] >= days_ago])
 
@@ -537,7 +532,7 @@ def display_recall_card(row_data):
                 image_url = image_url.split('|')[0] 
             else:
                 image_url = "https://via.placeholder.com/150/CCCCCC/FFFFFF?Text=Image+ND"
-            st.image(image_url, width=130) # Légèrement plus grande
+            st.image(image_url, width=130)
 
         with col_content:
             product_name = row_data.get('nom_commercial', row_data.get('modeles_ou_references', 'Produit non spécifié'))
@@ -556,28 +551,26 @@ def display_recall_card(row_data):
             elif any(keyword in risk_text_lower for keyword in ['allergène', 'allergie', 'microbiologique', 'corps étranger', 'chimique']):
                 badge_color = "orange"; badge_icon = "🔬"
             elif risk_text_raw != 'Risque non spécifié':
-                badge_color = "darkgoldenrod"; badge_icon = "❗" # Plus visible que gold
+                badge_color = "darkgoldenrod"; badge_icon = "❗"
 
             st.markdown(f"**Risque {badge_icon}:** <span style='color:{badge_color}; font-weight:bold;'>{risk_text_raw}</span>", unsafe_allow_html=True)
             st.markdown(f"**Marque:** {row_data.get('nom_de_la_marque_du_produit', 'N/A')}")
             
             motif = row_data.get('motif_du_rappel', 'N/A')
-            if len(motif) > 100: # Tronquer les motifs trop longs pour la carte
-                motif = motif[:97] + "..."
+            if len(str(motif)) > 100: 
+                motif = str(motif)[:97] + "..."
             st.markdown(f"**Motif:** {motif}")
 
             distributeurs = row_data.get('distributeurs', 'N/A')
             if pd.notna(distributeurs) and distributeurs:
-                 if len(distributeurs) > 70: distributeurs = distributeurs[:67] + "..."
+                 if len(str(distributeurs)) > 70: distributeurs = str(distributeurs)[:67] + "..."
                  st.markdown(f"**Distributeurs:** {distributeurs}")
-
 
             pdf_link = row_data.get('liens_vers_la_fiche_rappel', '#')
             if pdf_link and pdf_link != '#':
                  st.link_button("📄 Fiche de rappel", pdf_link, type="secondary", help="Ouvrir la fiche de rappel officielle")
         
         st.markdown('</div>', unsafe_allow_html=True)
-        # st.markdown("---") # Retiré pour alléger si beaucoup de cartes
 
 def display_paginated_recalls(data_df, items_per_page_setting):
     if data_df.empty:
@@ -590,7 +583,6 @@ def display_paginated_recalls(data_df, items_per_page_setting):
         st.session_state.current_page_recalls = 1
     
     total_pages = (len(data_df) - 1) // items_per_page_setting + 1
-    # S'assurer que la page actuelle est valide si le nombre d'items/page change
     if st.session_state.current_page_recalls > total_pages:
         st.session_state.current_page_recalls = max(1, total_pages)
     
@@ -601,7 +593,6 @@ def display_paginated_recalls(data_df, items_per_page_setting):
     
     current_recalls_page_df = data_df.iloc[start_idx:end_idx]
 
-    # Affichage en 2 colonnes
     for i in range(0, len(current_recalls_page_df), 2):
         cols = st.columns(2)
         with cols[0]:
@@ -630,11 +621,26 @@ def display_paginated_recalls(data_df, items_per_page_setting):
                 st.rerun()
 
 def create_advanced_filters(df_full_data):
+    # S'assurer que les dates de session sont initialisées avant de les utiliser
+    min_date_data = df_full_data['date_publication'].min() if not df_full_data.empty else START_DATE
+    max_date_data = date.today()
+
+    if 'date_filter_start' not in st.session_state:
+        st.session_state.date_filter_start = min_date_data
+    if 'date_filter_end' not in st.session_state:
+        st.session_state.date_filter_end = max_date_data
+    
+    # Convertir en objet date si ce sont des datetime (peut arriver avec la session)
+    if isinstance(st.session_state.date_filter_start, datetime):
+        st.session_state.date_filter_start = st.session_state.date_filter_start.date()
+    if isinstance(st.session_state.date_filter_end, datetime):
+        st.session_state.date_filter_end = st.session_state.date_filter_end.date()
+
+
     with st.expander("🔍 Filtres avancés et Options d'affichage", expanded=False):
         col1, col2 = st.columns(2)
 
         with col1:
-            # Catégories principales (API: categorie_de_produit)
             if 'categorie_de_produit' in df_full_data.columns:
                 unique_main_categories = sorted(df_full_data['categorie_de_produit'].dropna().unique())
                 selected_categories = st.multiselect(
@@ -645,7 +651,6 @@ def create_advanced_filters(df_full_data):
                 st.session_state.selected_categories_filter = selected_categories
             else: selected_categories = []
 
-            # Sous-catégories (API: sous_categorie_de_produit)
             if 'sous_categorie_de_produit' in df_full_data.columns:
                 df_for_subcats = df_full_data[df_full_data['categorie_de_produit'].isin(selected_categories)] if selected_categories else df_full_data
                 unique_subcategories = sorted(df_for_subcats['sous_categorie_de_produit'].dropna().unique())
@@ -658,11 +663,10 @@ def create_advanced_filters(df_full_data):
             else: selected_subcategories = []
 
         with col2:
-            # Risques (API: risques_encourus)
             if 'risques_encourus' in df_full_data.columns:
                 unique_risks = sorted(df_full_data['risques_encourus'].dropna().unique())
                 display_risks = unique_risks
-                if len(unique_risks) > 75: # Limiter pour la lisibilité
+                if len(unique_risks) > 75:
                     top_risks_counts = df_full_data['risques_encourus'].value_counts().nlargest(75).index.tolist()
                     display_risks = sorted(top_risks_counts)
                     st.caption(f"Affichage des 75 risques les plus fréquents (sur {len(unique_risks)}).")
@@ -674,27 +678,17 @@ def create_advanced_filters(df_full_data):
                 )
                 st.session_state.selected_risks_filter = selected_risks
             else: selected_risks = []
-
-            # Filtre de date
-            min_date_data = df_full_data['date_publication'].min() if not df_full_data.empty else START_DATE
-            max_date_data = date.today()
-
-            # Assurer que les dates de session sont des objets 'date'
-            default_start = st.session_state.get('date_filter_start', min_date_data)
-            if isinstance(default_start, datetime): default_start = default_start.date()
-            default_end = st.session_state.get('date_filter_end', max_date_data)
-            if isinstance(default_end, datetime): default_end = default_end.date()
-
-            selected_dates = st.date_input(
+            
+            selected_dates_tuple_local = st.date_input(
                 "Filtrer par période de publication:",
-                value=(default_start, default_end),
+                value=(st.session_state.date_filter_start, st.session_state.date_filter_end), # Utiliser les dates de session
                 min_value=min_date_data, max_value=max_date_data,
                 key="date_range_picker_adv"
             )
-            if len(selected_dates) == 2:
-                st.session_state.date_filter_start, st.session_state.date_filter_end = selected_dates
-            else: # Fallback si une seule date est retournée (ne devrait pas arriver avec date_input range)
-                selected_dates = (default_start, default_end)
+            if len(selected_dates_tuple_local) == 2:
+                st.session_state.date_filter_start, st.session_state.date_filter_end = selected_dates_tuple_local
+            else: 
+                selected_dates_tuple_local = (st.session_state.date_filter_start, st.session_state.date_filter_end)
 
 
         st.markdown("---")
@@ -704,7 +698,7 @@ def create_advanced_filters(df_full_data):
                                  key="items_page_slider")
         if items_per_page_setting != st.session_state.get('items_per_page_filter', DEFAULT_ITEMS_PER_PAGE):
             st.session_state.items_per_page_filter = items_per_page_setting
-            st.session_state.current_page_recalls = 1 # Réinitialiser la page si le nombre d'items change
+            st.session_state.current_page_recalls = 1
 
         recent_days_setting = st.slider("Période pour 'Rappels Récents' (jours):", min_value=7, max_value=90, 
                                value=st.session_state.get('recent_days_filter', DEFAULT_RECENT_DAYS), step=1,
@@ -718,20 +712,22 @@ def create_advanced_filters(df_full_data):
                 'date_filter_start', 'date_filter_end', 
                 'items_per_page_filter', 'recent_days_filter', 'current_page_recalls'
             ]
-            for key in keys_to_reset:
-                if key in st.session_state: del st.session_state[key]
-            # Réinitialiser aux valeurs par défaut explicites
+            for key_to_del in keys_to_reset: # Utiliser un nom différent pour la variable de boucle
+                if key_to_del in st.session_state: del st.session_state[key_to_del]
+            
+            # Réinitialiser explicitement aux valeurs par défaut
             st.session_state.date_filter_start = df_full_data['date_publication'].min() if not df_full_data.empty else START_DATE
             st.session_state.date_filter_end = date.today()
             st.session_state.items_per_page_filter = DEFAULT_ITEMS_PER_PAGE
             st.session_state.recent_days_filter = DEFAULT_RECENT_DAYS
             st.session_state.current_page_recalls = 1
+            st.session_state.search_term_main = ""
+            st.session_state.search_column_friendly_name_select = "Toutes les colonnes pertinentes"
             st.experimental_rerun()
 
-    # Affichage des filtres actifs en dehors de l'expander
     active_filters_display = []
     if st.session_state.get('search_term_main', ""):
-        search_col_friendly = st.session_state.get('search_column_friendly_name_select', "Toutes les colonnes")
+        search_col_friendly = st.session_state.get('search_column_friendly_name_select', "Toutes les colonnes pertinentes")
         active_filters_display.append(f"Recherche: \"{st.session_state.search_term_main}\" (dans {search_col_friendly})")
     if selected_categories:
         active_filters_display.append(f"Catégories: {', '.join(selected_categories)}")
@@ -740,18 +736,17 @@ def create_advanced_filters(df_full_data):
     if selected_risks:
         active_filters_display.append(f"Risques: {', '.join(selected_risks)}")
     
-    # Utiliser les dates de session pour l'affichage des filtres actifs
-    current_start_date = st.session_state.get('date_filter_start', min_date_data)
-    current_end_date = st.session_state.get('date_filter_end', max_date_data)
-    if current_start_date != min_date_data or current_end_date != max_date_data:
-        active_filters_display.append(f"Période: {current_start_date.strftime('%d/%m/%y')} - {current_end_date.strftime('%d/%m/%y')}")
+    current_start_date_display = st.session_state.date_filter_start
+    current_end_date_display = st.session_state.date_filter_end
+    if current_start_date_display != min_date_data or current_end_date_display != max_date_data:
+        active_filters_display.append(f"Période: {current_start_date_display.strftime('%d/%m/%y')} - {current_end_date_display.strftime('%d/%m/%y')}")
 
     if active_filters_display:
         st.markdown('<div class="filter-pills-container"><div class="filter-pills-title">Filtres actifs :</div><div class="filter-pills">' + 
                     ' '.join([f'<span class="filter-pill">{f}</span>' for f in active_filters_display]) + 
                     '</div></div>', unsafe_allow_html=True)
 
-    return selected_categories, selected_subcategories, selected_risks, selected_dates, items_per_page_setting
+    return selected_categories, selected_subcategories, selected_risks, (st.session_state.date_filter_start, st.session_state.date_filter_end), items_per_page_setting
 
 
 # --- Fonctions de Visualisation (Onglet Visualisations) ---
@@ -762,14 +757,21 @@ def create_improved_visualizations(data_df_viz):
 
     st.markdown('<div class="chart-container" style="margin-top:1rem;">', unsafe_allow_html=True)
     
-    if 'date_publication' in data_df_viz.columns:
-        # Convertir en datetime si ce n'est pas déjà le cas, pour être sûr
-        if not pd.api.types.is_datetime64_any_dtype(data_df_viz['date_publication']):
-             data_df_viz['date_publication_dt'] = pd.to_datetime(data_df_viz['date_publication'])
-        else:
-             data_df_viz['date_publication_dt'] = data_df_viz['date_publication'] # C'est déjà des dates/datetime
+    if 'date_publication' in data_df_viz.columns and not data_df_viz.empty:
+        if not pd.api.types.is_datetime64_any_dtype(data_df_viz['date_publication']) and not isinstance(data_df_viz['date_publication'].iloc[0], date):
+             data_df_viz['date_publication_dt'] = pd.to_datetime(data_df_viz['date_publication'], errors='coerce')
+        elif isinstance(data_df_viz['date_publication'].iloc[0], date) and not pd.api.types.is_datetime64_any_dtype(data_df_viz['date_publication']):
+            data_df_viz['date_publication_dt'] = pd.to_datetime(data_df_viz['date_publication']) # Convertir les objets date en datetime64 pour resample
+        else: # C'est déjà des datetime64
+             data_df_viz['date_publication_dt'] = data_df_viz['date_publication']
+        # Supprimer les lignes où la conversion a échoué
+        data_df_viz = data_df_viz.dropna(subset=['date_publication_dt'])
+        if data_df_viz.empty: # Si toutes les dates étaient invalides
+            st.warning("Dates invalides dans les données, impossible de générer les visualisations temporelles.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
     else:
-        st.warning("Colonne 'date_publication' manquante pour les visualisations temporelles.")
+        st.warning("Colonne 'date_publication' manquante ou vide pour les visualisations temporelles.")
         st.markdown('</div>', unsafe_allow_html=True)
         return
 
@@ -778,9 +780,8 @@ def create_improved_visualizations(data_df_viz):
     with tab1:
         st.subheader("Évolution des Rappels")
         if 'date_publication_dt' in data_df_viz.columns:
-            # Regrouper par mois-année
             monthly_data = data_df_viz.set_index('date_publication_dt').resample('M').size().reset_index(name='count')
-            monthly_data['year_month'] = monthly_data['date_publication_dt'].dt.strftime('%Y-%m') # Format pour affichage
+            monthly_data['year_month'] = monthly_data['date_publication_dt'].dt.strftime('%Y-%m')
             monthly_data = monthly_data.sort_values('year_month')
 
             if not monthly_data.empty:
@@ -789,7 +790,7 @@ def create_improved_visualizations(data_df_viz):
                 fig_temporal.update_layout(xaxis_tickangle=-45)
                 st.plotly_chart(fig_temporal, use_container_width=True)
             else: st.info("Pas de données mensuelles à afficher pour les tendances.")
-        else: st.warning("Impossible de générer le graphique temporel (colonne date manquante).")
+        else: st.warning("Impossible de générer le graphique temporel.")
 
     with tab2:
         st.subheader("Répartition des Rappels")
@@ -857,8 +858,6 @@ def manage_groq_api_key():
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔑 Assistant IA Groq")
     
-    # Utilisation d'un expander pour la configuration
-    # Ouvert par défaut si la clé n'est pas configurée ou invalide
     default_expanded = True
     if "user_groq_api_key" in st.session_state and st.session_state.user_groq_api_key and st.session_state.user_groq_api_key.startswith("gsk_"):
         default_expanded = False
@@ -868,25 +867,20 @@ def manage_groq_api_key():
             st.session_state.user_groq_api_key = ""
         
         new_key = st.text_input(
-            "Votre clé API Groq:", 
-            type="password", 
+            "Votre clé API Groq:", type="password", 
             value=st.session_state.user_groq_api_key,
-            help="Obtenez votre clé sur [console.groq.com](https://console.groq.com/keys). La clé est stockée temporairement dans la session de votre navigateur.",
-            key="groq_api_key_input_sidebar" # Clé unique pour l'input
+            help="Obtenez votre clé sur [console.groq.com](https://console.groq.com/keys). La clé est stockée temporairement.",
+            key="groq_api_key_input_sidebar"
         )
-        if new_key != st.session_state.user_groq_api_key: # Si la clé a été modifiée
+        if new_key != st.session_state.user_groq_api_key:
              st.session_state.user_groq_api_key = new_key
-             if new_key and new_key.startswith("gsk_"):
-                 st.success("Clé API Groq enregistrée.", icon="👍")
-             elif new_key: 
-                 st.warning("Format de clé API invalide. Elle devrait commencer par 'gsk_'.", icon="⚠️")
-             st.rerun() # Pour mettre à jour le statut de l'expander et de l'IA
+             if new_key and new_key.startswith("gsk_"): st.success("Clé API Groq enregistrée.", icon="👍")
+             elif new_key: st.warning("Format de clé API invalide.", icon="⚠️")
+             st.rerun() 
 
         model_options = {
-            "llama3-70b-8192": "Llama 3 (70B) - Puissant",
-            "llama3-8b-8192": "Llama 3 (8B) - Rapide",
-            "mixtral-8x7b-32768": "Mixtral (8x7B) - Large contexte",
-            "gemma-7b-it": "Gemma (7B) - Léger"
+            "llama3-70b-8192": "Llama 3 (70B) - Puissant", "llama3-8b-8192": "Llama 3 (8B) - Rapide",
+            "mixtral-8x7b-32768": "Mixtral (8x7B) - Large contexte", "gemma-7b-it": "Gemma (7B) - Léger"
         }
         selected_model_key = st.selectbox(
             "Choisir un modèle IA:", options=list(model_options.keys()),
@@ -896,12 +890,12 @@ def manage_groq_api_key():
         st.session_state.groq_model = selected_model_key
         
         with st.popover("Options avancées de l'IA"):
-            st.session_state.groq_temperature = st.slider("Température:", 0.0, 1.0, st.session_state.get('groq_temperature', 0.2), 0.1, help="Plus bas = plus déterministe.")
-            st.session_state.groq_max_tokens = st.slider("Tokens max réponse:", 256, 4096, st.session_state.get('groq_max_tokens', 1024), 256) # Max 8192 pour certains modèles mais 4096 est raisonnable
+            st.session_state.groq_temperature = st.slider("Température:", 0.0, 1.0, st.session_state.get('groq_temperature', 0.2), 0.1)
+            st.session_state.groq_max_tokens = st.slider("Tokens max réponse:", 256, 4096, st.session_state.get('groq_max_tokens', 1024), 256)
             st.session_state.groq_max_context_recalls = st.slider("Max rappels dans contexte IA:", 5, 50, st.session_state.get('groq_max_context_recalls', 15), 1)
 
     if st.session_state.user_groq_api_key and st.session_state.user_groq_api_key.startswith("gsk_"):
-        st.sidebar.caption(f"🟢 IA prête (modèle {model_options.get(st.session_state.groq_model, 'N/A')})")
+        st.sidebar.caption(f"🟢 IA prête ({model_options.get(st.session_state.groq_model, 'N/A')})")
         return True
     else:
         st.sidebar.caption("🔴 IA non configurée ou clé invalide.")
@@ -926,12 +920,13 @@ def prepare_context_for_ia(df_context, max_items=10):
         'risques_encourus', 'motif_du_rappel', 'date_publication', 'distributeurs'
     ]
     cols_to_use = [col for col in cols_for_ia if col in df_context.columns]
-    context_df_sample = df_context[cols_to_use].head(max_items)
+    # S'assurer que max_items ne dépasse pas la taille du DataFrame
+    actual_max_items = min(max_items, len(df_context))
+    context_df_sample = df_context[cols_to_use].head(actual_max_items)
     
     text_context = f"Voici un échantillon de {len(context_df_sample)} rappels (sur {len(df_context)} au total avec les filtres) :\n\n"
     for _, row in context_df_sample.iterrows():
         item_desc = []
-        # Utiliser les noms de colonnes API pour extraire les données
         if 'nom_de_la_marque_du_produit' in row and pd.notna(row['nom_de_la_marque_du_produit']):
             item_desc.append(f"Marque: {row['nom_de_la_marque_du_produit']}")
         
@@ -948,7 +943,6 @@ def prepare_context_for_ia(df_context, max_items=10):
         if 'risques_encourus' in row and pd.notna(row['risques_encourus']):
             item_desc.append(f"Risque: {row['risques_encourus']}")
         if 'motif_du_rappel' in row and pd.notna(row['motif_du_rappel']):
-            # Tronquer les motifs longs pour le contexte
             motif_ctx = str(row['motif_du_rappel'])
             if len(motif_ctx) > 70: motif_ctx = motif_ctx[:67] + "..."
             item_desc.append(f"Motif: {motif_ctx}")
@@ -965,59 +959,56 @@ def prepare_context_for_ia(df_context, max_items=10):
             
     return text_context
 
-def analyze_trends_data(df_analysis, product_type=None, risk_type=None, time_period="12m"):
+def analyze_trends_data(df_analysis, product_type=None, risk_type=None, time_period="12m"): # time_period non utilisé pour l'instant
     if df_analysis.empty:
         return {"status": "no_data", "message": "Aucune donnée disponible pour l'analyse de tendance."}
 
     df_filtered = df_analysis.copy()
-    # S'assurer que la date est au bon format
     if 'date_publication' in df_filtered.columns:
+        # Conversion robuste en datetime64
         if not pd.api.types.is_datetime64_any_dtype(df_filtered['date_publication']):
             df_filtered['date_publication_dt'] = pd.to_datetime(df_filtered['date_publication'], errors='coerce')
-        else:
+        elif isinstance(df_filtered['date_publication'].iloc[0], date): # Si c'est des objets date
+            df_filtered['date_publication_dt'] = pd.to_datetime(df_filtered['date_publication'])
+        else: # C'est déjà datetime64
             df_filtered['date_publication_dt'] = df_filtered['date_publication']
         df_filtered = df_filtered.dropna(subset=['date_publication_dt'])
         if df_filtered.empty: return {"status": "no_data", "message": "Dates invalides pour l'analyse."}
     else: return {"status": "error", "message": "Colonne 'date_publication' manquante."}
     
-    # Filtrage par période (simplifié, prend tout le df_filtered pour le moment)
-    # Un filtrage plus fin par période pourrait être ajouté ici.
     period_label = f"du {df_filtered['date_publication_dt'].min().strftime('%d/%m/%Y')} au {df_filtered['date_publication_dt'].max().strftime('%d/%m/%Y')}"
-
-    # Filtrer par type de produit et/ou risque si spécifié
     analysis_title_parts = ["Évolution des rappels"]
+
     if product_type:
-        df_filtered = df_filtered[
+        mask_product = (
             df_filtered['sous_categorie_de_produit'].astype(str).str.contains(product_type, case=False, na=False) |
-            df_filtered['nom_commercial'].astype(str).str.contains(product_type, case=False, na=False)
-        ]
+            df_filtered['nom_commercial'].astype(str).str.contains(product_type, case=False, na=False) |
+            df_filtered['categorie_de_produit'].astype(str).str.contains(product_type, case=False, na=False)
+        )
+        df_filtered = df_filtered[mask_product]
         analysis_title_parts.append(f"pour '{product_type}'")
     if risk_type:
-        df_filtered = df_filtered[
+        mask_risk = (
             df_filtered['risques_encourus'].astype(str).str.contains(risk_type, case=False, na=False) |
             df_filtered['motif_du_rappel'].astype(str).str.contains(risk_type, case=False, na=False)
-        ]
+        )
+        df_filtered = df_filtered[mask_risk]
         analysis_title_parts.append(f"avec risque/motif '{risk_type}'")
     
     if df_filtered.empty:
-        return {"status": "no_data", "message": f"Aucune donnée pour {product_type or ''} / {risk_type or ''} sur la période."}
+        return {"status": "no_data", "message": f"Aucune donnée pour les filtres spécifiques ({product_type or 'tous produits'}, {risk_type or 'tous risques'}) sur la période."}
 
-    # Séries temporelles mensuelles
     monthly_counts = df_filtered.set_index('date_publication_dt').resample('M').size()
-    if monthly_counts.empty : return {"status": "no_data", "message": "Pas de données mensuelles à analyser."}
+    if monthly_counts.empty : return {"status": "no_data", "message": "Pas de données mensuelles à analyser après filtrage."}
     
-    # Remplir les mois manquants avec 0 pour la continuité du graphique
     idx = pd.date_range(monthly_counts.index.min(), monthly_counts.index.max(), freq='MS')
     monthly_counts = monthly_counts.reindex(idx, fill_value=0)
-    monthly_counts_display = monthly_counts.copy() # Pour l'affichage des labels X
+    monthly_counts_display = monthly_counts.copy()
     monthly_counts_display.index = monthly_counts_display.index.strftime('%Y-%m')
 
-
     trend_stats = {"total_recalls": int(df_filtered.shape[0]), "monthly_avg": float(monthly_counts.mean())}
-    
-    # Régression linéaire pour la tendance
     slope = 0
-    if len(monthly_counts) >= 2: # Besoin d'au moins 2 points
+    if len(monthly_counts) >= 2:
         X = np.arange(len(monthly_counts)).reshape(-1, 1)
         y = monthly_counts.values
         model = LinearRegression().fit(X, y)
@@ -1026,60 +1017,51 @@ def analyze_trends_data(df_analysis, product_type=None, risk_type=None, time_per
         if slope > 0.1: trend_stats['trend_direction'] = "hausse"
         elif slope < -0.1: trend_stats['trend_direction'] = "baisse"
         else: trend_stats['trend_direction'] = "stable"
-    else: trend_stats['trend_direction'] = "indéterminée"
+    else: trend_stats['trend_direction'] = "indéterminée (données insuffisantes)"
 
-
-    # Génération du graphique Matplotlib
-    fig, ax = plt.subplots(figsize=(8, 4)) # Taille réduite pour le chat
+    fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(monthly_counts_display.index, monthly_counts.values, marker='o', linestyle='-', label='Rappels/mois')
-    if len(monthly_counts) >= 2:
+    if len(monthly_counts) >= 2 and 'trend_direction' in trend_stats and trend_stats['trend_direction'] != "indéterminée (données insuffisantes)":
         trend_line = model.predict(X)
         ax.plot(monthly_counts_display.index, trend_line, color='red', linestyle='--', label=f'Tendance ({trend_stats["trend_direction"]})')
     
     ax.set_title(' '.join(analysis_title_parts), fontsize=10)
-    ax.set_xlabel("Mois", fontsize=8)
-    ax.set_ylabel("Nombre de rappels", fontsize=8)
-    ax.tick_params(axis='x', rotation=45, labelsize=7)
-    ax.tick_params(axis='y', labelsize=7)
-    ax.grid(True, linestyle=':', alpha=0.7)
-    ax.legend(fontsize=8)
+    ax.set_xlabel("Mois", fontsize=8); ax.set_ylabel("Nombre de rappels", fontsize=8)
+    ax.tick_params(axis='x', rotation=45, labelsize=7); ax.tick_params(axis='y', labelsize=7)
+    ax.grid(True, linestyle=':', alpha=0.7); ax.legend(fontsize=8)
     plt.tight_layout()
     
     buf = io.BytesIO()
-    plt.savefig(buf, format="png")
-    buf.seek(0)
+    plt.savefig(buf, format="png"); buf.seek(0)
     graph_base64 = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
 
-    # Résumé textuel
     text_summary = f"Analyse de tendance ({period_label}):\n"
     text_summary += f"- **Total rappels analysés**: {trend_stats['total_recalls']}\n"
     text_summary += f"- **Moyenne mensuelle**: {trend_stats['monthly_avg']:.1f} rappels\n"
     if 'trend_direction' in trend_stats:
-        text_summary += f"- **Tendance générale**: {trend_stats['trend_direction']} (pente: {slope:.2f})\n"
+        text_summary += f"- **Tendance générale**: {trend_stats['trend_direction']}"
+        if trend_stats['trend_direction'] not in ["indéterminée (données insuffisantes)", "stable"]:
+             text_summary += f" (pente: {slope:.2f})\n"
+        else:
+            text_summary += "\n"
     
-    # Top catégories, risques, motifs
     if 'sous_categorie_de_produit' in df_filtered.columns:
         top_cat = df_filtered['sous_categorie_de_produit'].value_counts().nlargest(3)
-        if not top_cat.empty:
-            text_summary += "- **Top 3 sous-catégories:** " + ", ".join([f"{idx} ({val})" for idx, val in top_cat.items()]) + "\n"
+        if not top_cat.empty: text_summary += "- **Top 3 sous-catégories:** " + ", ".join([f"{idx} ({val})" for idx, val in top_cat.items()]) + "\n"
     if 'risques_encourus' in df_filtered.columns:
         top_risk = df_filtered['risques_encourus'].value_counts().nlargest(3)
-        if not top_risk.empty:
-            text_summary += "- **Top 3 risques:** " + ", ".join([f"{idx} ({val})" for idx, val in top_risk.items()]) + "\n"
+        if not top_risk.empty: text_summary += "- **Top 3 risques:** " + ", ".join([f"{idx} ({val})" for idx, val in top_risk.items()]) + "\n"
 
     return {
-        "status": "success",
-        "text_summary": text_summary,
-        "graph_base64": graph_base64,
-        "monthly_data": {str(k): int(v) for k,v in monthly_counts_display.to_dict().items()}, # Pour IA si besoin
-        "trend_stats": trend_stats # Pour IA si besoin
+        "status": "success", "text_summary": text_summary, "graph_base64": graph_base64,
+        "monthly_data": {str(k): int(v) for k,v in monthly_counts_display.to_dict().items()},
+        "trend_stats": trend_stats
     }
 
 
 def ask_groq_ai(client, user_query, context_data_text, trend_analysis_results=None):
-    if not client:
-        return "Client Groq non initialisé. Vérifiez votre clé API."
+    if not client: return "Client Groq non initialisé. Vérifiez votre clé API."
 
     system_prompt = f"""Tu es "RappelConso Insight Assistant", un expert IA spécialisé dans l'analyse des données de rappels de produits alimentaires en France, basé sur les données de RappelConso.
     Date actuelle: {date.today().strftime('%d/%m/%Y')}.
@@ -1087,8 +1069,8 @@ def ask_groq_ai(client, user_query, context_data_text, trend_analysis_results=No
     NE PAS INVENTER d'informations. Si les données ne te permettent pas de répondre, indique-le clairement (ex: "Je n'ai pas cette information dans les données fournies.").
     Utilise le Markdown pour mettre en **gras** les chiffres clés et les points importants.
     Si une analyse de tendance a été effectuée et qu'un graphique est disponible (indiqué dans le contexte), mentionne-le et décris brièvement ce qu'il montre en t'appuyant sur le résumé d'analyse fourni.
-    Si la question est hors sujet (ne concerne pas les rappels de produits alimentaires, la sécurité alimentaire, ou les données fournies), réponds avec une blague courte et pertinente sur la sécurité alimentaire ou la nourriture, puis indique que tu ne peux pas répondre à la question.
-    Exemple de blague : "Pourquoi le pain est-il allé en thérapie ? Parce qu'il avait trop de mie-sère ! Plus sérieusement, je ne peux pas répondre à cette question car elle sort de mon domaine d'expertise sur RappelConso."
+    Si la question est hors sujet (ne concerne pas les rappels de produits alimentaires, la sécurité alimentaire, ou les données fournies), réponds avec une blague COURTE et pertinente sur la sécurité alimentaire ou la nourriture, puis indique que tu ne peux pas répondre à la question.
+    Exemple de blague : "Pourquoi le steak haché a-t-il rompu avec la salade ? Parce qu'elle était trop vinaigrette ! Plus sérieusement, cette question sort de mon domaine d'expertise sur RappelConso."
     Sois toujours courtois.
     """
     
@@ -1096,8 +1078,7 @@ def ask_groq_ai(client, user_query, context_data_text, trend_analysis_results=No
 
     if trend_analysis_results and trend_analysis_results["status"] == "success":
         full_context_for_ai += f"Une analyse de tendance a été effectuée. Voici son résumé:\n{trend_analysis_results['text_summary']}\n"
-        full_context_for_ai += "Un graphique illustrant cette tendance est disponible et sera affiché à l'utilisateur.\n"
-        # On ne passe pas le base64 du graph à l'IA, juste le résumé.
+        full_context_for_ai += "Un graphique illustrant cette tendance est disponible et sera affiché à l'utilisateur si pertinent.\n"
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1106,47 +1087,39 @@ def ask_groq_ai(client, user_query, context_data_text, trend_analysis_results=No
     
     try:
         chat_completion = client.chat.completions.create(
-            messages=messages,
-            model=st.session_state.get("groq_model", "llama3-8b-8192"),
+            messages=messages, model=st.session_state.get("groq_model", "llama3-8b-8192"),
             temperature=st.session_state.get("groq_temperature", 0.2),
             max_tokens=st.session_state.get("groq_max_tokens", 1024),
         )
         response_content = chat_completion.choices[0].message.content
-        # Mise en gras simple des nombres (peut être amélioré avec regex plus complexe)
-        response_content = re.sub(r'(\b\d{1,3}(?:[,.]\d{1,2})?\b)(?!%)', r'**\1**', response_content) # Nombres seuls
-        response_content = re.sub(r'(\*\* \d+ \*\*)', r' \1 ', response_content) # Eviter le gras sur les espaces
+        # Mise en gras des nombres (peut être affinée)
+        response_content = re.sub(r'(\b\d{1,3}(?:[,.]\d{1,2})?\b)(?!%|[-\w])', r'**\1**', response_content) 
         return response_content
     except Exception as e:
         st.error(f"Erreur lors de l'appel à l'API Groq: {e}")
-        # Vérifier si c'est une erreur d'authentification
         if "authentication" in str(e).lower() or "api key" in str(e).lower():
-            return "Erreur d'authentification avec l'API Groq. Veuillez vérifier votre clé API dans la barre latérale."
-        return "Désolé, une erreur technique m'empêche de traiter votre demande pour le moment."
+            return "Erreur d'authentification avec l'API Groq. Vérifiez votre clé API."
+        return "Désolé, une erreur technique m'empêche de traiter votre demande."
 
 
 # --- Main App Logic ---
 def main():
     create_header()
     
-    st.sidebar.image(LOGO_URL, use_column_width=True)
+    st.sidebar.image(LOGO_URL, use_container_width=True) # CORRIGÉ
     st.sidebar.title("Navigation & Options")
     
     groq_ready = manage_groq_api_key()
     groq_client = get_groq_client() if groq_ready else None
 
-    # Initialisation de l'état de session (si pas déjà fait par les composants)
     default_session_keys = {
-        'current_page_recalls': 1,
-        'items_per_page_filter': DEFAULT_ITEMS_PER_PAGE,
-        'recent_days_filter': DEFAULT_RECENT_DAYS,
-        'date_filter_start': START_DATE, # Sera écrasé par min_date_data si df chargé
-        'date_filter_end': date.today(),
-        'search_term_main': "",
-        'search_column_friendly_name_select': "Toutes les colonnes pertinentes" # Valeur par défaut pour le selectbox
+        'current_page_recalls': 1, 'items_per_page_filter': DEFAULT_ITEMS_PER_PAGE,
+        'recent_days_filter': DEFAULT_RECENT_DAYS, 'date_filter_start': START_DATE,
+        'date_filter_end': date.today(), 'search_term_main': "",
+        'search_column_friendly_name_select': "Toutes les colonnes pertinentes"
     }
     for key, value in default_session_keys.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
+        if key not in st.session_state: st.session_state[key] = value
 
     df_alim = load_data(API_URL_BASE, START_DATE)
 
@@ -1154,54 +1127,37 @@ def main():
         st.error("Aucune donnée de rappel alimentaire n'a pu être chargée. L'application ne peut pas continuer.")
         st.stop()
     
-    # Mettre à jour les dates par défaut de session avec les min/max réels des données chargées
-    if 'date_filter_start_init' not in st.session_state: # Pour ne le faire qu'une fois
+    if 'date_filter_start_init' not in st.session_state:
         min_data_date_actual = df_alim['date_publication'].min()
-        if isinstance(min_data_date_actual, date): # Vérifier que c'est bien une date
-             st.session_state.date_filter_start = min_data_date_actual
-        st.session_state.date_filter_start_init = True # Marquer comme initialisé
+        if isinstance(min_data_date_actual, date): st.session_state.date_filter_start = min_data_date_actual
+        st.session_state.date_filter_start_init = True
 
-
-    # Barre de recherche principale
-    cols_search = st.columns([3,2]) # Ratio pour input et selectbox
+    cols_search = st.columns([3,2])
     with cols_search[0]:
         st.session_state.search_term_main = st.text_input(
-            "Rechercher un produit, marque, risque...", 
-            value=st.session_state.get('search_term_main', ""),
-            placeholder="Ex: saumon, listeria, carrefour...",
-            key="main_search_input",
-            label_visibility="collapsed" # Le label est implicite par le placeholder
+            "Rechercher un produit, marque, risque...", value=st.session_state.get('search_term_main', ""),
+            placeholder="Ex: saumon, listeria, carrefour...", key="main_search_input", label_visibility="collapsed"
         )
     with cols_search[1]:
-        # Options pour le selectbox de la colonne de recherche
         search_column_options_friendly = ["Toutes les colonnes pertinentes"] + list(FRIENDLY_TO_API_COLUMN_MAPPING.keys())
         st.session_state.search_column_friendly_name_select = st.selectbox(
             "Chercher dans:", search_column_options_friendly, 
             index=search_column_options_friendly.index(st.session_state.get('search_column_friendly_name_select', "Toutes les colonnes pertinentes")),
-            key="main_search_column_select",
-            label_visibility="collapsed"
+            key="main_search_column_select", label_visibility="collapsed"
         )
 
-    # Filtres avancés (définis dans st.session_state par la fonction)
     (selected_main_categories, selected_subcategories, selected_risks, 
-     selected_dates_tuple, items_per_page_setting) = create_advanced_filters(df_alim)
+     selected_dates_tuple_main, items_per_page_setting) = create_advanced_filters(df_alim)
 
-    # Application des filtres
     search_column_api = None
     if st.session_state.search_column_friendly_name_select != "Toutes les colonnes pertinentes":
         search_column_api = FRIENDLY_TO_API_COLUMN_MAPPING.get(st.session_state.search_column_friendly_name_select)
 
     current_filtered_df = filter_data(
-        df_alim,
-        selected_subcategories,
-        selected_risks,
-        st.session_state.search_term_main,
-        selected_dates_tuple, # st.session_state.date_filter_start, st.session_state.date_filter_end
-        selected_main_categories,
-        search_column_api
+        df_alim, selected_subcategories, selected_risks, st.session_state.search_term_main,
+        selected_dates_tuple_main, selected_main_categories, search_column_api
     )
 
-    # Onglets principaux
     tab_dashboard, tab_viz, tab_chatbot = st.tabs(["📊 Tableau de Bord", "📈 Visualisations", "🤖 Assistant IA"])
 
     with tab_dashboard:
@@ -1217,91 +1173,78 @@ def main():
     with tab_chatbot:
         st.subheader("💬 Questionner l'Assistant IA sur les Rappels Filtrés")
         st.markdown(
-            "<sub>L'IA répondra en se basant sur les rappels actuellement affichés (selon vos filtres). "
+            "<sub>L'IA répondra en se basant sur les rappels actuellement affichés. "
             "Les réponses sont des suggestions et doivent être vérifiées.</sub>", 
             unsafe_allow_html=True
         )
 
         if not groq_ready:
-            st.warning("Veuillez configurer votre clé API Groq dans la barre latérale pour utiliser l'assistant IA.", icon="⚠️")
+            st.warning("Veuillez configurer votre clé API Groq dans la barre latérale.", icon="⚠️")
         else:
-            # Suggestions d'analyses
             st.markdown("<div class='suggestion-button-container'>", unsafe_allow_html=True)
-            suggestion_cols = st.columns(3) # Ou plus, selon le nombre de suggestions
-            
+            suggestion_cols = st.columns(3)
             suggestion_queries = {
                 "Tendance générale des rappels ?": {"type": "trend"},
                 "Quels sont les 3 principaux risques ?": {"type": "context_only"},
-                "Y a-t-il des rappels pour 'fromage' ?": {"type": "context_specific", "product": "fromage"},
+                "Rappels pour 'fromage' ?": {"type": "context_specific", "product": "fromage"},
+                 "Analyse des 'Listeria'": {"type": "trend", "risk": "Listeria"},
+                 "Évolution des rappels 'Viande' ?": {"type": "trend", "product": "Viande"},
+                 "Quels produits 'Bio' ont été rappelés ?": {"type": "context_specific", "product": "Bio"},
             }
-            
-            # Initialiser la clé pour stocker la query cliquée
-            if 'clicked_suggestion_query' not in st.session_state:
-                st.session_state.clicked_suggestion_query = None
-
+            if 'clicked_suggestion_query' not in st.session_state: st.session_state.clicked_suggestion_query = None
             idx = 0
             for query_text, params in suggestion_queries.items():
                 with suggestion_cols[idx % len(suggestion_cols)]:
                     if st.button(query_text, key=f"suggestion_{idx}", use_container_width=True):
-                        st.session_state.clicked_suggestion_query = query_text # Stocker la query cliquée
-                        # st.session_state.user_groq_query_input = query_text # Pré-remplir l'input (optionnel)
-                        # La logique de traitement se fera après l'input chat
+                        st.session_state.clicked_suggestion_query = query_text
                 idx += 1
             st.markdown("</div>", unsafe_allow_html=True)
 
-
-            # Historique du chat
             if "groq_chat_history" not in st.session_state:
-                st.session_state.groq_chat_history = [{"role": "assistant", "content": "Bonjour ! Comment puis-je vous aider avec les données de rappel affichées ?"}]
+                st.session_state.groq_chat_history = [{"role": "assistant", "content": "Bonjour ! Posez-moi une question sur les données affichées ou utilisez une suggestion."}]
 
             chat_display_container = st.container(height=450, border=False)
             with chat_display_container:
                 for message in st.session_state.groq_chat_history:
                     with st.chat_message(message["role"]):
-                        st.markdown(message["content"], unsafe_allow_html=True) # unsafe pour le base64 img
+                        st.markdown(message["content"], unsafe_allow_html=True)
                         if message["role"] == "assistant" and "graph_base64" in message and message["graph_base64"]:
                             st.image(f"data:image/png;base64,{message['graph_base64']}")
             
-            # Input utilisateur (la clé est importante pour la gestion du rerun)
             user_groq_query = st.chat_input("Posez votre question à l'IA...", key="user_groq_query_input_main", disabled=not groq_ready)
             
-            # Logique pour traiter soit le clic sur un bouton, soit l'input direct
             query_to_process = None
             if st.session_state.clicked_suggestion_query:
                 query_to_process = st.session_state.clicked_suggestion_query
-                st.session_state.clicked_suggestion_query = None # Réinitialiser après traitement
+                st.session_state.clicked_suggestion_query = None 
             elif user_groq_query:
                 query_to_process = user_groq_query
 
             if query_to_process:
                 st.session_state.groq_chat_history.append({"role": "user", "content": query_to_process})
-                # Ré-afficher le message user dans le chat pour qu'il apparaisse avant le spinner
                 with chat_display_container:
-                     with st.chat_message("user"):
-                        st.markdown(query_to_process)
+                     with st.chat_message("user"): st.markdown(query_to_process)
 
                 with st.spinner("L'assistant IA réfléchit... 🤔"):
                     context_text_for_ai = prepare_context_for_ia(
-                        current_filtered_df, 
-                        max_items=st.session_state.get('groq_max_context_recalls', 15)
+                        current_filtered_df, max_items=st.session_state.get('groq_max_context_recalls', 15)
                     )
                     
                     trend_analysis_needed = False
-                    # Déterminer si une analyse de tendance est nécessaire
-                    # (soit par mots-clés, soit si c'est une suggestion de type "trend")
-                    if any(k in query_to_process.lower() for k in ["tendance", "évolution", "statistique", "analyse de", "combien de rappel"]):
+                    trend_product, trend_risk = None, None
+
+                    if query_to_process in suggestion_queries: # Si c'est une suggestion cliquée
+                        params = suggestion_queries[query_to_process]
+                        if params.get("type") == "trend": trend_analysis_needed = True
+                        trend_product = params.get("product")
+                        trend_risk = params.get("risk")
+                    elif any(k in query_to_process.lower() for k in ["tendance", "évolution", "statistique", "analyse de", "combien de rappel"]):
                         trend_analysis_needed = True
-                    elif query_to_process in suggestion_queries and suggestion_queries[query_to_process].get("type") == "trend":
-                         trend_analysis_needed = True
+                        # Simple extraction de mots-clés pour produit/risque (peut être améliorée)
+                        if "fromage" in query_to_process.lower(): trend_product = "fromage"
+                        if "listeria" in query_to_process.lower(): trend_risk = "listeria"
+                        # ... ajouter d'autres mots-clés si besoin ...
                     
-                    # Paramètres pour l'analyse de tendance (si une suggestion spécifique est cliquée)
-                    trend_product = None
-                    trend_risk = None
-                    if query_to_process in suggestion_queries:
-                        trend_product = suggestion_queries[query_to_process].get("product")
-                        trend_risk = suggestion_queries[query_to_process].get("risk")
-
-
                     trend_results = None
                     if trend_analysis_needed:
                         trend_results = analyze_trends_data(current_filtered_df, product_type=trend_product, risk_type=trend_risk)
@@ -1313,13 +1256,14 @@ def main():
                     assistant_message["graph_base64"] = trend_results["graph_base64"]
                 
                 st.session_state.groq_chat_history.append(assistant_message)
-                st.rerun() # Pour afficher la nouvelle réponse et effacer l'input
+                st.rerun()
 
     st.sidebar.markdown("---")
-    st.sidebar.caption(f"Données RappelConso 'Alimentation'. {len(df_alim)} rappels depuis {st.session_state.date_filter_start.strftime('%d/%m/%Y')}.")
+    # Utiliser st.session_state.date_filter_start pour être sûr d'avoir la date la plus à jour du filtre
+    start_date_display = st.session_state.get('date_filter_start', START_DATE)
+    st.sidebar.caption(f"Données RappelConso 'Alimentation'. {len(df_alim)} rappels depuis {start_date_display.strftime('%d/%m/%Y')}.")
     if st.sidebar.button("🔄 Mettre à jour les données", type="primary", use_container_width=True, key="update_data_btn"):
         st.cache_data.clear() 
-        # Réinitialiser les clés de session qui dépendent des données pour forcer leur recalcul
         if 'date_filter_start_init' in st.session_state: del st.session_state.date_filter_start_init
         st.experimental_rerun()
 
