@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from groq import Groq
-import re # Pour le Markdown dans la réponse de l'IA
+import re
 
 # Configuration de la page
 st.set_page_config(
@@ -218,7 +218,7 @@ st.markdown("""
             background-color: #ffffff;
             border-radius: 10px;
             padding: 1.5rem;
-            box_shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
             margin-top: 1rem;
         }
         .stChatMessage {
@@ -247,7 +247,7 @@ st.markdown("""
             border-top-right-radius: 15px !important;
         }
         .stChatMessage img {
-            max-width: 100%;
+            max_width: 100%;
             border-radius: 7px;
         }
 
@@ -311,19 +311,19 @@ st.markdown("""
 API_URL_BASE = "https://data.economie.gouv.fr/api/records/1.0/search/"
 API_URL_FOR_LOAD = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso-v2-gtin-espaces&q="
 
-START_DATE = date(2022, 1, 1) # Date de début pour le chargement initial
+START_DATE = date(2022, 1, 1)
 API_TIMEOUT_SEC = 30
 DEFAULT_ITEMS_PER_PAGE = 6
 DEFAULT_RECENT_DAYS = 30
 LOGO_URL = "https://raw.githubusercontent.com/M00N69/RAPPELCONSO/main/logo%2004%20copie.jpg"
 
-# API limit constant
-API_MAX_RECORDS_PER_REQUEST = 10000 # The sum of start + rows cannot exceed this
+# API limit constant based on error message (sum of start + rows)
+API_MAX_REQUEST_WINDOW = 10000
 
 
 FRIENDLY_TO_API_COLUMN_MAPPING = {
-    "Motif du rappel": "motif_du_rappel",
-    "Risques encourus": "risques_encourus",
+    "Motif du rappel": "motif_du_rappel", # Correct column name for v2 dataset
+    "Risques encourus": "risques_encourus", # Correct column name for v2 dataset
     "Nom de la marque": "nom_de_la_marque_du_produit",
     "Nom commercial": "nom_commercial",
     "Modèle/Référence": "modeles_ou_references",
@@ -334,10 +334,10 @@ FRIENDLY_TO_API_COLUMN_MAPPING = {
 API_TO_FRIENDLY_COLUMN_MAPPING = {v: k for k, v in FRIENDLY_TO_API_COLUMN_MAPPING.items()}
 
 
-# --- Fonctions de chargement de données (CORRIGÉE pour la limite API et les toasts) ---
+# --- Fonctions de chargement de données (CORRIGÉE pour la limite API) ---
 @st.cache_data(show_spinner="Chargement des données RappelConso...", ttl=3600)
 def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
-    """Charge les données depuis l'API en utilisant la méthode de filtrage par refine de l'URL."""
+    """Charge les données depuis l'API en respectant la limite start + rows <= 10000."""
     all_records = []
     start_date_str = start_date_filter.strftime('%Y-%m-%d')
     today_str = date.today().strftime('%Y-%m-%d')
@@ -351,23 +351,17 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
 
     current_start_row = 0
     rows_per_page = 1000 # Keep a reasonable page size for fetching
+    api_max_request_window = 10000 # The API limit: start + rows <= 10000
 
     while True:
-        # Check the API limit BEFORE making the request
-        # If current_start_row + rows_per_page exceeds the limit,
-        # we need to adjust rows or break. Given the error, the simplest is to break
-        # if current_start_row reaches or exceeds the limit, assuming you can't even start there.
-        # Let's cap the start row *before* it reaches 10000.
-        if current_start_row >= API_MAX_RECORDS_PER_REQUEST:
-            # We hit the API's maximum offset limit.
-            # A message will be displayed in main() based on the final number of records.
-            break
+        # Calculate how many rows we can fetch in the next request
+        # ensuring current_start_row + rows_to_fetch <= api_max_request_window
+        remaining_in_window = api_max_request_window - current_start_row
+        rows_to_fetch = min(rows_per_page, remaining_in_window)
 
-        # Calculate rows for this request, ensuring start + rows <= API_MAX_RECORDS_PER_REQUEST
-        # For simplicity with fixed rows_per_page, we just cap the start row as above.
-        # The API will naturally return fewer rows on the last possible page.
-        # So, rows_to_fetch = rows_per_page is fine here.
-        rows_to_fetch = rows_per_page
+        # If no more rows can be fetched within the window, break the loop
+        if rows_to_fetch <= 0:
+            break
 
         paginated_url = f"{api_url_filtered}&start={current_start_row}&rows={rows_to_fetch}"
 
@@ -379,7 +373,8 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
             records = data.get('records')
 
             if not records:
-                # No records returned means we're at the end of results for the current filters
+                # No records returned means we're at the end of results for the current filters,
+                # OR we hit the end before reaching the API limit.
                 break
 
             all_records.extend([rec['fields'] for rec in records])
@@ -387,16 +382,16 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
             # Update start for the next iteration
             current_start_row += len(records)
 
-            # If the number of records returned is less than rows_to_fetch,
-            # it means this was the last page of results.
+            # If we fetched fewer records than requested (meaning it was the last page of results
+            # *for the current filters*, regardless of the API limit), break.
+            # Or if we just fetched the last batch possible within the API window limit, break.
             if len(records) < rows_to_fetch:
-                break
+                 break
 
             # Small pause to be polite to the API
             time.sleep(0.05)
 
         except requests.exceptions.HTTPError as http_err:
-            # Error messages are acceptable outside the main conditional loop logic
             st.error(f"Erreur HTTP de l'API pendant le chargement: {http_err}")
             st.error(f"URL de la requête ayant échoué: {paginated_url}")
             try: error_detail = response.json(); st.error(f"Détails de l'erreur JSON: {error_detail}")
@@ -407,11 +402,9 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
         except requests.exceptions.Timeout: st.error("Délai d'attente dépassé lors de la requête à l'API."); return pd.DataFrame()
         except Exception as e: st.error(f"Une erreur inattendue est survenue pendant le chargement: {e}"); return pd.DataFrame()
 
-    # End of while loop. No st.toast inside the cache function.
 
     if not all_records:
-        # Message for empty results can be displayed in main() based on the returned df
-        return pd.DataFrame()
+        return pd.DataFrame() # Return empty DataFrame if no records fetched
 
     df = pd.DataFrame(all_records)
 
@@ -422,12 +415,11 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
         if not df.empty:
              df = df.sort_values(by='date_publication', ascending=False).reset_index(drop=True)
         else:
-             # If all dates are invalid, return empty DataFrame to prevent further errors
              st.warning("Toutes les dates de publication sont invalides après conversion. Aucun rappel valide n'a été chargé.", icon="⚠️")
-             return pd.DataFrame() # Return empty DataFrame if no valid dates
+             return pd.DataFrame()
     else:
         st.warning("La colonne 'date_publication' est manquante dans les données de l'API. Le tri et certains filtres pourraient ne pas fonctionner.", icon="⚠️")
-        df['date_publication'] = pd.NaT # Assign NaT if column is missing
+        df['date_publication'] = pd.NaT
 
 
     for api_col_name in FRIENDLY_TO_API_COLUMN_MAPPING.values():
@@ -442,7 +434,7 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
     return df
 
 
-# --- Fonctions de filtrage (inchangée) ---
+# --- Fonctions de filtrage (inchangée - logique de filtrage est déjà correcte pour v2) ---
 def filter_data(data_df, selected_subcategories, selected_risks, search_term, selected_dates_tuple, selected_categories, search_column_api_name=None):
     filtered_df = data_df.copy()
 
@@ -922,50 +914,39 @@ def manage_groq_api_key():
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔑 Assistant IA Groq")
 
-    # L'expander reste ouvert par défaut tant qu'il n'y a pas de clé valide en session
     default_expanded = True
     if "user_groq_api_key" in st.session_state and st.session_state.user_groq_api_key and st.session_state.user_groq_api_key.startswith("gsk_"):
         default_expanded = False
 
     with st.sidebar.expander("Configurer l'accès à l'IA", expanded=default_expanded):
-        # Initialisation de la clé en session state si elle n'existe pas
         if "user_groq_api_key" not in st.session_state:
             st.session_state.user_groq_api_key = ""
 
-        # Champ de saisie pour la clé API
         new_key = st.text_input(
             "Votre clé API Groq:", type="password",
-            value=st.session_state.user_groq_api_key, # Utilisez la valeur en session comme valeur par défaut
+            value=st.session_state.user_groq_api_key,
             help="Obtenez votre clé sur [console.groq.com](https://console.groq.com/keys). La clé est stockée temporairement en session.",
             key="groq_api_key_input_sidebar"
         )
 
-        # Si la valeur saisie dans le champ change, mettez à jour la session state
-        # Cette condition est importante pour ne pas relancer reruns en boucle
         if new_key != st.session_state.user_groq_api_key:
              st.session_state.user_groq_api_key = new_key
-             # Afficher un message utilisateur lors de la saisie/modification
              if new_key:
                  if new_key.startswith("gsk_"):
                     st.success("Clé API Groq enregistrée.", icon="👍")
-                    # Supprimer l'éventuelle erreur d'initialisation précédente
                     if 'groq_client_error' in st.session_state: del st.session_state.groq_client_error
                  else:
                     st.warning("Format de clé API invalide. Doit commencer par 'gsk_'.", icon="⚠️")
              else:
                  st.info("Aucune clé API Groq n'est configurée.", icon="ℹ️")
-             # Déclencher un rerun pour que l'état de la clé soit mis à jour et le client Groq initialisé
              st.experimental_rerun()
 
-        # Vérifier si une clé valide est présente en session pour activer le reste des options IA
         model_disabled = not (st.session_state.user_groq_api_key and st.session_state.user_groq_api_key.startswith("gsk_"))
 
-        # Sélection du modèle IA
         model_options = {
             "llama3-70b-8192": "Llama 3 (70B) - Puissant", "llama3-8b-8192": "Llama 3 (8B) - Rapide",
             "mixtral-8x7b-32768": "Mixtral (8x7B) - Large contexte", "gemma-7b-it": "Gemma (7B) - Léger"
         }
-        # Trouver l'index du modèle sélectionné pour maintenir la valeur par défaut correcte
         current_model = st.session_state.get('groq_model', 'llama3-8b-8192')
         model_index = list(model_options.keys()).index(current_model) if current_model in model_options else 0
 
@@ -974,33 +955,27 @@ def manage_groq_api_key():
             format_func=lambda x: model_options[x],
             index=model_index,
             key="groq_model_select_sidebar",
-            disabled=model_disabled # Désactivé si pas de clé valide
+            disabled=model_disabled
         )
-        # Mettre à jour la session state uniquement si le sélecteur n'est pas désactivé
         if not model_disabled:
              st.session_state.groq_model = selected_model_key
 
-        # Options avancées IA (température, tokens, contexte)
-        with st.popover("Options avancées de l'IA", disabled=model_disabled): # Désactivé si pas de clé valide
+        with st.popover("Options avancées de l'IA", disabled=model_disabled):
             st.session_state.groq_temperature = st.slider("Température:", 0.0, 1.0, st.session_state.get('groq_temperature', 0.2), 0.1, disabled=model_disabled)
             st.session_state.groq_max_tokens = st.slider("Tokens max réponse:", 256, 4096, st.session_state.get('groq_max_tokens', 1024), 256, disabled=model_disabled)
             st.session_state.groq_max_context_recalls = st.slider("Max rappels dans contexte IA:", 5, 50, st.session_state.get('groq_max_context_recalls', 15), 1, disabled=model_disabled)
 
 
-    # Afficher l'état de la connexion IA
     if st.session_state.user_groq_api_key and st.session_state.user_groq_api_key.startswith("gsk_"):
-        # Tenter d'obtenir le client pour vérifier l'initialisation
         client_status = get_groq_client()
         if client_status is not None:
              st.sidebar.caption(f"🟢 IA prête ({model_options.get(st.session_state.groq_model, 'N/A')})")
              return True
         else:
-             # Si get_groq_client a retourné None, il y a une erreur d'initialisation
              st.sidebar.caption(f"❌ IA non prête. Erreur client.")
-             # Le détail de l'erreur est stocké dans st.session_state.groq_client_error
              if "groq_client_error" in st.session_state and st.session_state.groq_client_error:
                   st.sidebar.caption(f"Détails: {st.session_state.groq_client_error[:70]}...")
-             return False # Retourner False si le client n'a pas pu être initialisé
+             return False
     else:
         st.sidebar.caption("🔴 IA non configurée ou clé invalide.")
         return False
@@ -1012,19 +987,13 @@ def get_groq_client():
 
     if api_key and isinstance(api_key, str) and api_key.startswith("gsk_"):
         try:
-            # Tenter d'initialiser le client
             client = Groq(api_key=api_key)
-            # Optionnel: faire un petit appel pour vérifier la clé (peut ralentir l'app)
-            # client.models.list() # Exemple d'appel simple
-            if 'groq_client_error' in st.session_state: del st.session_state.groq_client_error # Clear previous errors on success
+            if 'groq_client_error' in st.session_state: del st.session_state.groq_client_error
             return client
         except Exception as e:
-            # Capturer l'erreur d'initialisation et la stocker en session
             st.session_state.groq_client_error = str(e)
-            # Ne pas afficher st.error ici pour ne pas interférer avec le cache
-            return None # Retourner None si l'initialisation échoue
+            return None
     else:
-        # Si la clé n'est pas présente ou invalide, s'assurer qu'il n'y a pas d'erreur stockée
         if 'groq_client_error' in st.session_state: del st.session_state.groq_client_error
         return None
 
@@ -1210,17 +1179,17 @@ def ask_groq_ai(client, user_query, context_data_text, trend_analysis_results=No
 
     system_prompt = f"""Tu es "RappelConso Insight Assistant", un expert IA spécialisé dans l'analyse des données de rappels de produits alimentaires en France, basé sur les données de RappelConso.
     Date actuelle: {date.today().strftime('%d/%m/%Y')}.
-    Ton rôle est d'aider l'utilisateur à comprendre les données de rappels filtrées affichées dans l'application.
+    Ton rôle est d'aider l'utilisateur à comprendre les rappels et les tendances **basés sur les données qui t'ont été fournies dans le contexte**. Ces données reflètent les filtres actuellement appliqués par l'utilisateur dans l'application.
     Réponds aux questions de manière concise, professionnelle et en te basant STRICTEMENT sur les informations et données de contexte fournies (échantillon des rappels filtrés et résumé d'analyse de tendance si disponible).
-    NE PAS INVENTER d'informations. Si les données de contexte ne te permettent pas de répondre, indique-le clairement (ex: "Je n'ai pas suffisamment d'informations dans les données fournies pour répondre précisément à cette question.").
+    NE PAS INVENTER d'informations. Si les données de contexte fournies ne te permettent pas de répondre précisément à une question (par exemple, si le rappel recherché n'est pas dans l'échantillon ou si les données filtrées sont vides), indique-le clairement (ex: "Je n'ai pas trouvé de rappel pertinent dans les données fournies avec les filtres actuels." ou "Les données fournies ne contiennent pas suffisamment d'informations pour analyser ce risque.").
     Utilise le Markdown pour mettre en **gras** les chiffres clés, les noms de catégories/risques importants et les points essentiels. Utilise des listes à puces si pertinent.
     Si une analyse de tendance a été effectuée et qu'un graphique est disponible (indiqué dans le contexte et les résultats passés), mentionne-le et décris brièvement ce qu'il montre en t'appuyant sur le résumé d'analyse fourni. Précise sur quelle période l'analyse porte (celle des données filtrées).
-    Si la question est complètement hors sujet (ne concerne pas les rappels de produits alimentaires, la sécurité alimentaire, ou les données fournies), réponds avec une blague COURTE et pertinente sur la sécurité alimentaire ou la nourriture, puis indique que tu ne peux pas répondre à la question car elle sort de ton domaine d'expertise sur RappelConso.
+    Si la question est complètement hors sujet (ne concerne pas les rappels de produits alimentaires, la sécurité alimentaire, les données fournies, ou des sujets liés), réponds avec une blague COURTE et pertinente sur la sécurité alimentaire ou la nourriture, puis indique que tu ne peux pas répondre à la question car elle sort de ton domaine d'expertise sur RappelConso.
     Exemple de blague : "Pourquoi le pain a-t-il appelé la police ? Parce qu'il s'est fait émietter ! 🍞 Plus sérieusement, ma connaissance se limite aux données de RappelConso."
     Sois toujours courtois et utile dans le cadre des données disponibles.
     """
 
-    full_context_for_ai = f"Contexte des rappels de produits (échantillon des rappels *actuellement filtrés* par l'utilisateur et disponibles pour analyse):\n{context_data_text}\n\n"
+    full_context_for_ai = f"Contexte des rappels de produits (basé sur les rappels *actuellement filtrés* par l'utilisateur):\n{context_data_text}\n\n"
 
     if trend_analysis_results and trend_analysis_results["status"] == "success":
         full_context_for_ai += f"Une analyse de tendance sur les données filtrées a été effectuée. Voici son résumé:\n{trend_analysis_results['text_summary']}\n"
@@ -1263,13 +1232,9 @@ def main():
     st.sidebar.image(LOGO_URL, use_container_width=True)
     st.sidebar.title("Navigation & Options")
 
-    # Gestion de la clé API Groq et obtention du client
-    # Cette fonction demande la clé via text_input et la stocke en session
     groq_ready = manage_groq_api_key()
-    # Cette fonction récupère la clé depuis la session pour initialiser le client
     groq_client = get_groq_client() if groq_ready else None
 
-    # Initialisation des états de session si non existants
     default_session_keys = {
         'current_page_recalls': 1, 'items_per_page_filter': DEFAULT_ITEMS_PER_PAGE,
         'recent_days_filter': DEFAULT_RECENT_DAYS, 'date_filter_start': START_DATE,
@@ -1289,21 +1254,14 @@ def main():
     df_alim = load_data(API_URL_FOR_LOAD, START_DATE)
 
     # --- Check data loading status AFTER load_data returns ---
-    if df_alim.empty:
-        # st.error message is already handled inside load_data if an API error occurred.
-        # If df_alim is empty but no API error occurred, it means no data matched the initial date/category filters.
-        if 'date_publication' in df_alim.columns and not df_alim['date_publication'].empty and pd.isna(df_alim['date_publication'].iloc[0]):
-             # This case means dates were invalid and filtered out in load_data.
-             # The warning for this is already in load_data.
-             pass # Don't add another generic error here
-        else:
-             # Generic empty data message if no specific error/warning was shown by load_data
-             st.info("Aucun rappel alimentaire trouvé pour les critères de chargement initiaux (date de début et catégorie Alimentation). Réessayez avec une date de début différente ou contactez l'administrateur si le problème persiste.", icon="ℹ️")
-        st.stop() # Stop execution if no data is loaded
-
-    # Check if the number of loaded records might have been capped by the API limit
-    if len(df_alim) >= API_MAX_RECORDS_PER_REQUEST:
-         st.warning(f"Note : Le chargement a été limité à {API_MAX_RECORDS_PER_REQUEST} rappels en raison d'une restriction de l'API externe. Les analyses et affichages se basent sur ces {API_MAX_RECORDS_PER_REQUEST} premiers rappels.", icon="⚠️")
+    # Display message about API limit if applicable
+    # Check if the number of loaded records is equal to the API window limit (or very close)
+    if len(df_alim) >= (API_MAX_REQUEST_WINDOW - 100): # Use a small buffer
+         st.warning(f"Note : Le chargement a potentiellement atteint près de {API_MAX_REQUEST_WINDOW} rappels, limité par une restriction de l'API externe (`start + rows <= 10000`). Les analyses et affichages se basent sur ces {len(df_alim)} premiers rappels.", icon="⚠️")
+    elif df_alim.empty:
+         # Generic empty data message if no specific error/warning was shown by load_data
+         st.info("Aucun rappel alimentaire trouvé pour les critères de chargement initiaux (date de début et catégorie Alimentation). Réessayez avec une date de début différente ou contactez l'administrateur si le problème persiste.", icon="ℹ️")
+         st.stop()
 
 
     # S'assurer que la date de début du filtre correspond à la date min réelle des données chargées la première fois
@@ -1312,7 +1270,7 @@ def main():
         if isinstance(min_data_date_actual, datetime): min_data_date_actual = min_data_date_actual.date()
         elif not isinstance(min_data_date_actual, date): min_data_date_actual = START_DATE
         st.session_state.date_filter_start = min_data_date_actual
-        st.session_state.date_filter_start_init = True
+        st.session_state.date_filter_init = True
 
 
     cols_search = st.columns([3,2])
@@ -1368,16 +1326,13 @@ def main():
             unsafe_allow_html=True
         )
 
-        # Check IA status and display appropriate message
         ai_is_ready = groq_ready and (groq_client is not None)
 
         if not ai_is_ready:
              st.info("L'assistant IA n'est pas disponible. Veuillez configurer une clé API Groq valide dans la barre latérale.")
-             # Optionnel: afficher le détail de l'erreur client si présent
              if "groq_client_error" in st.session_state and st.session_state.groq_client_error:
-                  st.caption(f"Détails de l'erreur de connexion : {st.session_state.groq_client_error}")
-
-        else: # IA is ready, display chat interface
+                  st.caption(f"Détails de l'erreur de connexion : {st.session_state.groq_client_error[:100]}...")
+        else:
             st.markdown("<div class='suggestion-button-container'>", unsafe_allow_html=True)
             suggestion_cols = st.columns(3)
             suggestion_queries = {
@@ -1411,7 +1366,7 @@ def main():
                 "Posez votre question à l'IA...",
                 value=st.session_state.get('user_groq_query_input_main', ""),
                 key="user_groq_query_input_main",
-                disabled=not ai_is_ready # Disable if IA is not ready
+                disabled=not ai_is_ready
             )
 
             query_to_process = None
@@ -1433,14 +1388,10 @@ def main():
                      for r in possible_risks:
                          if r in query_lower: params_to_process["risk"] = r; break
 
-            if query_to_process and ai_is_ready: # Only process if IA is ready
+            if query_to_process and ai_is_ready:
                 st.session_state.groq_chat_history.append({"role": "user", "content": query_to_process})
                 st.session_state.last_processed_groq_query = query_to_process
-                st.session_state.user_groq_query_input_main = "" # Clear input after processing
-
-                with chat_display_container:
-                     with st.chat_message("user"): st.markdown(query_to_process)
-
+                st.session_state.user_groq_query_input_main = ""
 
                 with st.spinner("L'assistant IA réfléchit... 🤔"):
                     context_text_for_ai = prepare_context_for_ia(
@@ -1463,7 +1414,7 @@ def main():
 
                 st.session_state.groq_chat_history.append(assistant_message)
 
-                st.experimental_rerun() # Rerun to display the new message
+                st.experimental_rerun()
 
 
     st.sidebar.markdown("---")
