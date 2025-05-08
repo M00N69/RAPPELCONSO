@@ -235,15 +235,15 @@ st.markdown("""
              color: white !important;
              border-bottom-right-radius: 5px !important;
              border-bottom-left-radius: 15px !important;
-             border-top-left-radius: 15px !important;
-             border-top-right-radius: 15px !important;
+             border_top_left_radius: 15px !important;
+             border_top_right_radius: 15px !important;
         }
         .stChatMessage[data-testid="chatAvatarIcon-assistant"] + div .stChatMessageContent {
             background-color: #e9ecef !important;
             color: #333 !important;
             border-bottom-left-radius: 5px !important;
-            border-bottom-right-radius: 15px !important;
-            border-top-left-radius: 15px !important;
+            border-bottom_right_radius: 15px !important;
+            border_top_left_radius: 15px !important;
             border_top_right_radius: 15px !important;
         }
         .stChatMessage img {
@@ -275,7 +275,7 @@ st.markdown("""
             font-weight: 500;
             padding: 0.4em 0.8em;
         }
-        .suggestion-button-container .stButton button:hover {
+        .suggestion-button_container .stButton button:hover {
             background-color: #cce7ff;
             border-color: #00A0E0;
             transform: translateY(-1px);
@@ -330,9 +330,9 @@ FRIENDLY_TO_API_COLUMN_MAPPING = {
     "Distributeurs": "distributeurs",
     "Catégorie principale": "categorie_de_produit",
     "Sous-catégorie": "sous_categorie_de_produit"
-    # NOTE: Votre code fonctionnel utilisait "motif_rappel", "liens_vers_les_images",
-    # "categorie_produit", "sous_categorie_produit" qui ne correspondent pas
-    # aux noms de colonnes du dataset V2. Le code actuel utilise les noms corrects.
+    # NOTE: Your previous 'functional' code might have used different column names
+    # like "motif_rappel", "liens_vers_les_images", etc., which are from older datasets.
+    # This code uses the correct names for the V2 dataset at the provided API URL.
 }
 API_TO_FRIENDLY_COLUMN_MAPPING = {v: k for k, v in FRIENDLY_TO_API_COLUMN_MAPPING.items()}
 
@@ -349,12 +349,12 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
         f"{api_url_base_plus_dataset}"
         f"&refine.date_publication:>={urllib.parse.quote(start_date_str)}"
         f"&refine.date_publication:<={urllib.parse.quote(today_str)}"
-        f"&refine.categorie_de_produit=Alimentation"
+        f"&refine.categorie_de_produit=Alimentation" # Filtre pour n'obtenir que l'alimentation
     )
 
     current_start_row = 0
-    rows_per_page = 1000
-    api_max_request_window = 10000
+    rows_per_page = 1000 # Keep a reasonable page size for fetching
+    api_max_request_window = 10000 # The API limit: start + rows <= 10000
 
     while True:
         # Calculate how many rows we can fetch in the next request
@@ -376,6 +376,8 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
             records = data.get('records')
 
             if not records:
+                # No records returned means we're at the end of results for the current filters,
+                # OR we hit the end before reaching the API limit.
                 break
 
             all_records.extend([rec['fields'] for rec in records])
@@ -386,14 +388,15 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
             if len(records) < rows_to_fetch:
                  break
 
+            # Small pause to be polite to the API
             time.sleep(0.05)
 
         except requests.exceptions.HTTPError as http_err:
             st.error(f"Erreur HTTP de l'API pendant le chargement: {http_err}")
             st.error(f"URL de la requête ayant échoué: {paginated_url}")
             try: error_detail = response.json(); st.error(f"Détails de l'erreur JSON: {error_detail}")
-            except: pass
-            return pd.DataFrame()
+            except: pass # Ignore if JSON decode fails on error response
+            return pd.DataFrame() # Return empty DataFrame on error
         except requests.exceptions.RequestException as e: st.error(f"Erreur de requête API pendant le chargement: {e}"); return pd.DataFrame()
         except KeyError as e: st.error(f"Erreur de structure JSON de l'API pendant le chargement: clé manquante {e}"); return pd.DataFrame()
         except requests.exceptions.Timeout: st.error("Délai d'attente dépassé lors de la requête à l'API."); return pd.DataFrame()
@@ -401,7 +404,7 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
 
 
     if not all_records:
-        return pd.DataFrame()
+        return pd.DataFrame() # Return empty DataFrame if no records fetched
 
     df = pd.DataFrame(all_records)
 
@@ -431,13 +434,14 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
     return df
 
 
-# --- Fonctions de filtrage (inchangée - logique de filtrage est déjà correcte pour v2) ---
+# --- Fonctions de filtrage (légère amélioration informative) ---
 def filter_data(data_df, selected_subcategories, selected_risks, search_term, selected_dates_tuple, selected_categories, search_column_api_name=None):
     """
     Filters the DataFrame based on the given criteria.
-    NOTE: Uses column names from FRIENDLY_TO_API_COLUMN_MAPPING which are correct for the V2 dataset.
+    Uses column names from FRIENDLY_TO_API_COLUMN_MAPPING which are correct for the V2 dataset.
     """
     filtered_df = data_df.copy()
+    initial_count = len(filtered_df) # Count before applying filters
 
     if 'categorie_de_produit' in filtered_df.columns and selected_categories:
         filtered_df = filtered_df[filtered_df['categorie_de_produit'].isin(selected_categories)]
@@ -452,6 +456,12 @@ def filter_data(data_df, selected_subcategories, selected_risks, search_term, se
             # Filter using the specified column (e.g., 'motif_du_rappel')
             col_as_str = filtered_df[search_column_api_name].fillna('').astype(str)
             filtered_df = filtered_df[col_as_str.str.lower().str.contains(search_term_lower)]
+
+            # Add info message if search term is specific but no results found in that column
+            if filtered_df.empty and initial_count > 0:
+                 friendly_col_name = API_TO_FRIENDLY_COLUMN_MAPPING.get(search_column_api_name, search_column_api_name)
+                 st.info(f"Aucun résultat trouvé pour la recherche \"{search_term}\" dans la colonne \"{friendly_col_name}\" avec les filtres actuels. Le terme pourrait ne pas exister dans cette colonne parmi les {initial_count} rappels disponibles.", icon="ℹ️")
+
         else:
             # Search across multiple relevant columns if no specific column is selected
             cols_to_search_api = [
@@ -466,6 +476,7 @@ def filter_data(data_df, selected_subcategories, selected_risks, search_term, se
                     lambda x: x.str.lower().str.contains(search_term_lower)
                 ).any(axis=1)
                 filtered_df = filtered_df[mask]
+            # No specific info needed here if global search fails, as it's expected.
 
     if 'date_publication' in filtered_df.columns and not filtered_df.empty and pd.notna(filtered_df['date_publication'].iloc[0]):
         start_filter_date = selected_dates_tuple[0]
@@ -546,6 +557,7 @@ def display_recall_card(row_data):
     """
     Displays a single recall item in a card format.
     Uses column names correct for the V2 dataset like 'liens_vers_images', 'motif_du_rappel', etc.
+    Handles potential missing/empty data more robustly.
     """
     with st.container():
         st.markdown('<div class="recall-card-container">', unsafe_allow_html=True)
@@ -553,22 +565,31 @@ def display_recall_card(row_data):
 
         with col_img:
             # Use the correct column name 'liens_vers_images' for V2
-            image_url = row_data.get('liens_vers_images')
-            # Handle various formats: list, string with '|', NaN/None
-            if isinstance(image_url, list) and image_url:
-                 image_url = image_url[0]
-            elif isinstance(image_url, str) and image_url:
-                image_url = image_url.split('|')[0]
-            else:
-                # Placeholder image if no valid URL is found
-                image_url = "https://via.placeholder.com/150/CCCCCC/FFFFFF?Text=Image+ND"
+            image_url_raw = row_data.get('liens_vers_images')
+            image_url = "https://via.placeholder.com/150/CCCCCC/FFFFFF?Text=Image+ND" # Default placeholder
+
+            # Logic to find a suitable image URL from the raw data
+            if isinstance(image_url_raw, list) and image_url_raw:
+                 # If it's a non-empty list, take the first element
+                 if isinstance(image_url_raw[0], str) and image_url_raw[0]:
+                     image_url = image_url_raw[0]
+            elif isinstance(image_url_raw, str) and image_url_raw:
+                # If it's a non-empty string, handle the '|' separator
+                image_parts = image_url_raw.split('|')
+                if image_parts and image_parts[0]:
+                    image_url = image_parts[0]
+            # Otherwise, image_url remains the placeholder
+
             st.image(image_url, width=130)
+
 
         with col_content:
             # Use .get() and provide a default value, handle NaN/None explicitly for clarity
-            product_name = row_data.get('nom_commercial', row_data.get('modeles_ou_references', 'Produit non spécifié'))
-            if pd.isna(product_name) or product_name == '': product_name = row_data.get('modeles_ou_references', 'Produit non spécifié')
-            if pd.isna(product_name) or product_name == '': product_name = 'Produit non spécifié'
+            product_name = row_data.get('nom_commercial')
+            if pd.isna(product_name) or product_name == '':
+                 product_name = row_data.get('modeles_ou_references')
+            if pd.isna(product_name) or product_name == '':
+                 product_name = 'Produit non spécifié'
 
             st.markdown(f"<h5>{product_name}</h5>", unsafe_allow_html=True)
 
@@ -578,37 +599,42 @@ def display_recall_card(row_data):
 
             # Use the correct column name 'risques_encourus' for V2
             risk_text_raw = row_data.get('risques_encourus', 'Risque non spécifié')
-            risk_text_lower = str(risk_text_raw).lower()
+            risk_text_display = risk_text_raw if pd.notna(risk_text_raw) and risk_text_raw != '' else 'Non spécifié'
+            risk_text_lower = str(risk_text_display).lower()
 
             badge_color = "grey"; badge_icon = "⚠️"
             if any(keyword in risk_text_lower for keyword in ['listeria', 'salmonelle', 'e. coli', 'danger immédiat', 'toxique']):
                 badge_color = "red"; badge_icon = "☠️"
             elif any(keyword in risk_text_lower for keyword in ['allergène', 'allergie', 'microbiologique', 'corps étranger', 'chimique']):
                 badge_color = "orange"; badge_icon = "🔬"
-            elif risk_text_raw and risk_text_raw != 'Risque non spécifié':
+            elif risk_text_display != 'Non spécifié':
                 badge_color = "darkgoldenrod"; badge_icon = "❗"
 
 
-            st.markdown(f"**Risque {badge_icon}:** <span style='color:{badge_color}; font-weight:bold;'>{risk_text_raw if pd.notna(risk_text_raw) else 'Non spécifié'}</span>", unsafe_allow_html=True)
-            st.markdown(f"**Marque:** {row_data.get('nom_de_la_marque_du_produit', 'N/A')}")
+            st.markdown(f"**Risque {badge_icon}:** <span style='color:{badge_color}; font-weight:bold;'>{risk_text_display}</span>", unsafe_allow_html=True)
+
+            # Use the correct column name 'nom_de_la_marque_du_produit' for V2
+            marque = row_data.get('nom_de_la_marque_du_produit')
+            marque_display = marque if pd.notna(marque) and marque != '' else 'N/A'
+            st.markdown(f"**Marque:** {marque_display}")
 
             # Use the correct column name 'motif_du_rappel' for V2
             motif = row_data.get('motif_du_rappel')
-            motif_display = 'N/A' if pd.isna(motif) else str(motif)
+            motif_display = 'N/A' if pd.isna(motif) or motif == '' else str(motif)
             if len(motif_display) > 100:
                 motif_display = motif_display[:97] + "..."
             st.markdown(f"**Motif:** {motif_display}")
 
             # Use the correct column name 'distributeurs' for V2
             distributeurs = row_data.get('distributeurs')
-            distributeurs_display = 'N/A' if pd.isna(distributeurs) else str(distributeurs)
+            distributeurs_display = 'N/A' if pd.isna(distributeurs) or distributeurs == '' else str(distributeurs)
             if distributeurs_display != 'N/A':
                  if len(distributeurs_display) > 70: distributeurs_display = distributeurs_display[:67] + "..."
                  st.markdown(f"**Distributeurs:** {distributeurs_display}")
 
             # Use the correct column name 'liens_vers_la_fiche_rappel' for V2
             pdf_link = row_data.get('liens_vers_la_fiche_rappel')
-            if pdf_link and pd.notna(pdf_link) and pdf_link != '#':
+            if pdf_link and pd.notna(pdf_link) and pdf_link != '#' and pdf_link != '':
                  st.link_button("📄 Fiche de rappel", pdf_link, type="secondary", help="Ouvrir la fiche de rappel officielle")
 
         st.markdown('</div>', unsafe_allow_html=True)
@@ -767,9 +793,9 @@ def create_advanced_filters(df_full_data):
             st.session_state.date_filter_end = date.today()
             st.session_state.items_per_page_filter = DEFAULT_ITEMS_PER_PAGE
             st.session_state.recent_days_filter = DEFAULT_RECENT_DAYS
-            st.session_state.current_page_recalls = 1
             st.session_state.search_term_main = ""
             st.session_state.search_column_friendly_name_select = "Toutes les colonnes pertinentes"
+            st.session_state.current_page_recalls = 1
             st.experimental_rerun()
 
 
@@ -1261,7 +1287,7 @@ def main():
         'groq_chat_history': [{"role": "assistant", "content": "Bonjour ! Posez-moi une question sur les données affichées ou utilisez une suggestion."}],
         'last_processed_groq_query': '',
         'clicked_suggestion_query': None,
-        'date_filter_start_init': False # Flag to initialize date filter start from data min date
+        'date_filter_start_init': False
     }
     for key, value in default_session_keys.items():
         if key not in st.session_state: st.session_state[key] = value
@@ -1273,10 +1299,9 @@ def main():
     # Display message about API limit if applicable
     # Check if the number of loaded records is equal to the API window limit (or very close)
     # This assumes the API returns records sorted by date descending.
-    if len(df_alim) >= (API_MAX_REQUEST_WINDOW - 100): # Use a small buffer
-         st.warning(f"Note : Le chargement a potentiellement atteint près de {API_MAX_REQUEST_WINDOW} rappels, limité par une restriction de l'API externe (`start + rows <= 10000`). Les analyses et affichages se basent sur ces {len(df_alim)} premiers rappels.", icon="⚠️")
+    if len(df_alim) >= (API_MAX_REQUEST_WINDOW - 100) and API_MAX_REQUEST_WINDOW > 0: # Add check for API_MAX_REQUEST_WINDOW > 0
+         st.warning(f"Note : Le chargement a potentiellement atteint près de {API_MAX_REQUEST_WINDOW} rappels, limité par une restriction de l'API externe (`start + rows <= 10000`). Les analyses et affichages se basent sur ces {len(df_alim)} premiers rappels les plus récents.", icon="⚠️")
     elif df_alim.empty:
-         # Generic empty data message if no specific error/warning was shown by load_data
          st.info("Aucun rappel alimentaire trouvé pour les critères de chargement initiaux (date de début et catégorie Alimentation). Réessayez avec une date de début différente ou contactez l'administrateur si le problème persiste.", icon="ℹ️")
          st.stop()
 
@@ -1287,7 +1312,7 @@ def main():
         if isinstance(min_data_date_actual, datetime): min_data_date_actual = min_data_date_actual.date()
         elif not isinstance(min_data_date_actual, date): min_data_date_actual = START_DATE
         st.session_state.date_filter_start = min_data_date_actual
-        st.session_state.date_filter_init = True
+        st.session_state.date_filter_init = True # Correction: use date_filter_init flag
 
 
     cols_search = st.columns([3,2])
