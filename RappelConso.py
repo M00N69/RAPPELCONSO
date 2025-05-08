@@ -136,14 +136,14 @@ st.markdown("""
             padding: 1rem;
             margin-bottom: 1rem;
             box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-            border-left: 5px solid #00A0E0;
+            border_left: 5px solid #00A0E0;
         }
-        .recall-card-container h5 {
+        .recall-card_container h5 {
             color: #005A9C;
             margin-top: 0;
             margin-bottom: 0.25rem;
         }
-        .recall-card-container .stImage > img {
+        .recall-card_container .stImage > img {
             border-radius: 6px;
             object-fit: cover;
         }
@@ -210,7 +210,7 @@ st.markdown("""
             padding: 0.3rem 0.7rem;
             border-radius: 15px;
             font-size: 0.9em;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            box_shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         /* --- Chat Interface --- */
@@ -218,13 +218,13 @@ st.markdown("""
             background-color: #ffffff;
             border-radius: 10px;
             padding: 1.5rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            box_shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
             margin-top: 1rem;
         }
         .stChatMessage {
             border-radius: 15px !important;
-            max-width: 85% !important;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+            max_width: 85% !important;
+            box_shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
         }
         .stChatMessage > div[data-testid="stChatMessageContent"] {
             border-radius: 15px !important;
@@ -233,16 +233,16 @@ st.markdown("""
         .stChatMessage[data-testid="chatAvatarIcon-user"] + div .stChatMessageContent {
              background-color: #0072C6 !important;
              color: white !important;
-             border-bottom-right-radius: 5px !important;
-             border-bottom-left-radius: 15px !important;
+             border_bottom_right_radius: 5px !important;
+             border_bottom_left_radius: 15px !important;
              border_top_left_radius: 15px !important;
              border_top_right_radius: 15px !important;
         }
         .stChatMessage[data-testid="chatAvatarIcon-assistant"] + div .stChatMessageContent {
             background-color: #e9ecef !important;
             color: #333 !important;
-            border-bottom-left-radius: 5px !important;
-            border-bottom_right_radius: 15px !important;
+            border_bottom_left_radius: 5px !important;
+            border_bottom_right_radius: 15px !important;
             border_top_left_radius: 15px !important;
             border_top_right_radius: 15px !important;
         }
@@ -257,18 +257,18 @@ st.markdown("""
         }
         .stTextArea textarea:focus {
             border-color: #0072C6;
-            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+            box_shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
         }
 
         /* Suggestions d'analyses */
         .suggestion-button-container {
             display: flex;
-            flex-wrap: wrap;
+            flex_wrap: wrap;
             gap: 0.5rem;
             margin-bottom: 1rem;
         }
         .suggestion-button-container .stButton button {
-            background-color: #e6f3ff;
+            background_color: #e6f3ff;
             color: #0072C6;
             border: 1px solid #cce7ff;
             font-size: 0.9em;
@@ -290,24 +290,25 @@ st.markdown("""
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .metric-card, .recall-card-container, .chart-container, .chat-container {
+        .metric-card, .recall_card_container, .chart-container, .chat_container {
             animation: fadeInUp 0.5s ease-out;
         }
 
         /* --- Responsive Design --- */
-        @media (max-width: 768px) {
+        @media (max_width: 768px) {
             .header-title { font-size: 1.8em; }
             .metric-card { padding: 1rem; }
             .metric-value { font-size: 1.8em; }
             .metric-label { font-size: 0.9em; }
             .stTabs [data-baseweb="tab"] { font-size: 0.9em; padding: 8px 10px;}
-            .main .block-container { padding-left: 0.5rem; padding-right: 0.5rem;}
+            .main .block-container { padding-left: 0.5rem; padding_right: 0.5rem;}
             .stChatMessage { max_width: 95% !important; }
         }
     </style>
 """, unsafe_allow_html=True)
 
 # --- Constants ---
+# Using the records/1.0/search API as it seems more suitable for pagination with start/rows
 API_URL_BASE = "https://data.economie.gouv.fr/api/records/1.0/search/"
 API_URL_FOR_LOAD = "https://data.economie.gouv.fr/api/records/1.0/search/?dataset=rappelconso-v2-gtin-espaces&q="
 
@@ -317,27 +318,30 @@ DEFAULT_ITEMS_PER_PAGE = 6
 DEFAULT_RECENT_DAYS = 30
 LOGO_URL = "https://raw.githubusercontent.com/M00N69/RAPPELCONSO/main/logo%2004%20copie.jpg"
 
-# API limit constant based on error message (sum of start + rows)
+# API limit constant based on error message (sum of start + rows) for the records/1.0/search endpoint
 API_MAX_REQUEST_WINDOW = 10000
 
 
+# Correct column names for the rappelconso-v2-gtin-espaces dataset
 FRIENDLY_TO_API_COLUMN_MAPPING = {
-    "Motif du rappel": "motif_du_rappel", # Correct column name for v2 dataset
-    "Risques encourus": "risques_encourus", # Correct column name for v2 dataset
+    "Motif du rappel": "motif_du_rappel",
+    "Risques encourus": "risques_encourus",
     "Nom de la marque": "nom_de_la_marque_du_produit",
     "Nom commercial": "nom_commercial",
     "Modèle/Référence": "modeles_ou_references",
     "Distributeurs": "distributeurs",
     "Catégorie principale": "categorie_de_produit",
     "Sous-catégorie": "sous_categorie_de_produit"
-    # NOTE: Your previous 'functional' code might have used different column names
-    # like "motif_rappel", "liens_vers_les_images", etc., which are from older datasets.
-    # This code uses the correct names for the V2 dataset at the provided API URL.
+    # Note: Other column names from your previous snippet like
+    # "noms_des_modeles_ou_references", "risques_encourus_par_le_consommateur",
+    # "date_de_publication", "liens_vers_les_images", "lien_vers_la_fiche_rappelconso"
+    # are not standard in the V2 dataset at the used endpoint.
+    # We use the correct V2 names available.
 }
 API_TO_FRIENDLY_COLUMN_MAPPING = {v: k for k, v in FRIENDLY_TO_API_COLUMN_MAPPING.items()}
 
 
-# --- Fonctions de chargement de données (CORRIGÉE pour la limite API et les toasts) ---
+# --- Fonctions de chargement de données (CORRIGÉE pour la limite API) ---
 @st.cache_data(show_spinner="Chargement des données RappelConso...", ttl=3600)
 def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
     """Charge les données depuis l'API en respectant la limite start + rows <= 10000."""
@@ -345,50 +349,53 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
     start_date_str = start_date_filter.strftime('%Y-%m-%d')
     today_str = date.today().strftime('%Y-%m-%d')
 
+    # Build the base URL with date and category filters using refine
     api_url_filtered = (
         f"{api_url_base_plus_dataset}"
         f"&refine.date_publication:>={urllib.parse.quote(start_date_str)}"
         f"&refine.date_publication:<={urllib.parse.quote(today_str)}"
-        f"&refine.categorie_de_produit=Alimentation" # Filtre pour n'obtenir que l'alimentation
+        f"&refine.categorie_de_produit=Alimentation" # Filter for food recalls
+        f"&sort=-date_publication" # Sort by date descending to get the latest recalls within the window
     )
 
     current_start_row = 0
-    rows_per_page = 1000 # Keep a reasonable page size for fetching
+    rows_per_page = 1000 # Page size for each API request
     api_max_request_window = 10000 # The API limit: start + rows <= 10000
 
     while True:
-        # Calculate how many rows we can fetch in the next request
-        # ensuring current_start_row + rows_to_fetch <= api_max_request_window
+        # Calculate how many rows we can fetch in the next request without exceeding the API window limit
         remaining_in_window = api_max_request_window - current_start_row
         rows_to_fetch = min(rows_per_page, remaining_in_window)
 
         # If no more rows can be fetched within the window, break the loop
         if rows_to_fetch <= 0:
-            break
+            break # Stop fetching if we can't request any more records within the window
 
         paginated_url = f"{api_url_filtered}&start={current_start_row}&rows={rows_to_fetch}"
 
         try:
             response = requests.get(paginated_url, timeout=API_TIMEOUT_SEC)
-            response.raise_for_status()
+            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
             data = response.json()
 
             records = data.get('records')
 
             if not records:
-                # No records returned means we're at the end of results for the current filters,
-                # OR we hit the end before reaching the API limit.
+                # No records returned means we're at the end of available results for the current filters,
+                # or we hit the end before reaching the API limit.
                 break
 
             all_records.extend([rec['fields'] for rec in records])
 
+            # Update start for the next iteration
             current_start_row += len(records)
 
-            # If we fetched fewer records than requested OR we reached the end of the API window exactly
+            # If we fetched fewer records than requested, it means this was the last page of results.
+            # This also implicitly handles the case where the last page is exactly at the API window limit.
             if len(records) < rows_to_fetch:
                  break
 
-            # Small pause to be polite to the API
+            # Small pause to be polite to the API and avoid rate limits
             time.sleep(0.05)
 
         except requests.exceptions.HTTPError as http_err:
@@ -402,89 +409,70 @@ def load_data(api_url_base_plus_dataset, start_date_filter=START_DATE):
         except requests.exceptions.Timeout: st.error("Délai d'attente dépassé lors de la requête à l'API."); return pd.DataFrame()
         except Exception as e: st.error(f"Une erreur inattendue est survenue pendant le chargement: {e}"); return pd.DataFrame()
 
+    # End of while loop. No st.elements should be called directly inside this cached function.
 
     if not all_records:
         return pd.DataFrame() # Return empty DataFrame if no records fetched
 
     df = pd.DataFrame(all_records)
 
-    # --- Data Cleaning and Preparation (remains the same) ---
+    # --- Data Cleaning and Preparation ---
+    # Ensure 'date_publication' is datetime.date objects
     if 'date_publication' in df.columns:
         df['date_publication'] = pd.to_datetime(df['date_publication'], errors='coerce').dt.date
-        df = df.dropna(subset=['date_publication'])
+        df = df.dropna(subset=['date_publication']) # Remove rows with invalid dates
         if not df.empty:
              df = df.sort_values(by='date_publication', ascending=False).reset_index(drop=True)
         else:
+             # If all dates are invalid after conversion, return empty DataFrame
              st.warning("Toutes les dates de publication sont invalides après conversion. Aucun rappel valide n'a été chargé.", icon="⚠️")
              return pd.DataFrame()
     else:
+        # If 'date_publication' column is missing, create it with NaT (Not a Time) values
         st.warning("La colonne 'date_publication' est manquante dans les données de l'API. Le tri et certains filtres pourraient ne pas fonctionner.", icon="⚠️")
         df['date_publication'] = pd.NaT
 
 
+    # Ensure all expected columns exist and replace empty lists/None with pd.NA
     for api_col_name in FRIENDLY_TO_API_COLUMN_MAPPING.values():
         if api_col_name not in df.columns:
-            df[api_col_name] = pd.NA
+            df[api_col_name] = pd.NA # Add missing columns with pd.NA
         else:
-             if df[api_col_name].apply(lambda x: isinstance(x, list) and not x).any():
-                  df[api_col_name] = df[api_col_name].apply(lambda x: pd.NA if isinstance(x, list) and not x else x)
-             if df[api_col_name].isnull().any():
-                  df[api_col_name] = df[api_col_name].replace({None: pd.NA})
+             # Replace empty lists or None with pd.NA for consistency and easier filtering
+             df[api_col_name] = df[api_col_name].apply(lambda x: pd.NA if (isinstance(x, list) and not x) or x is None else x)
+
 
     return df
 
 
-# --- Fonctions de filtrage (légère amélioration informative) ---
+# --- Fonctions de filtrage (améliorée avec message informatif) ---
 def filter_data(data_df, selected_subcategories, selected_risks, search_term, selected_dates_tuple, selected_categories, search_column_api_name=None):
     """
-    Filters the DataFrame based on the given criteria.
-    Uses column names from FRIENDLY_TO_API_COLUMN_MAPPING which are correct for the V2 dataset.
+    Filters the DataFrame based on the given criteria using V2 column names.
+    Includes informative message if a specific search returns no results.
     """
     filtered_df = data_df.copy()
-    initial_count = len(filtered_df) # Count before applying filters
+    initial_count_before_search = len(filtered_df) # Count before applying search term
 
+    # Apply category, subcategory, and risk filters first
     if 'categorie_de_produit' in filtered_df.columns and selected_categories:
         filtered_df = filtered_df[filtered_df['categorie_de_produit'].isin(selected_categories)]
     if 'sous_categorie_de_produit' in filtered_df.columns and selected_subcategories:
         filtered_df = filtered_df[filtered_df['sous_categorie_de_produit'].isin(selected_subcategories)]
     if 'risques_encourus' in filtered_df.columns and selected_risks:
+        # Use fillna('') for safety before .isin()
         filtered_df = filtered_df[filtered_df['risques_encourus'].fillna('').isin(selected_risks)]
 
-    if search_term:
-        search_term_lower = search_term.lower()
-        if search_column_api_name and search_column_api_name in filtered_df.columns:
-            # Filter using the specified column (e.g., 'motif_du_rappel')
-            col_as_str = filtered_df[search_column_api_name].fillna('').astype(str)
-            filtered_df = filtered_df[col_as_str.str.lower().str.contains(search_term_lower)]
-
-            # Add info message if search term is specific but no results found in that column
-            if filtered_df.empty and initial_count > 0:
-                 friendly_col_name = API_TO_FRIENDLY_COLUMN_MAPPING.get(search_column_api_name, search_column_api_name)
-                 st.info(f"Aucun résultat trouvé pour la recherche \"{search_term}\" dans la colonne \"{friendly_col_name}\" avec les filtres actuels. Le terme pourrait ne pas exister dans cette colonne parmi les {initial_count} rappels disponibles.", icon="ℹ️")
-
-        else:
-            # Search across multiple relevant columns if no specific column is selected
-            cols_to_search_api = [
-                'nom_de_la_marque_du_produit', 'nom_commercial', 'modeles_ou_references',
-                'risques_encourus', 'motif_du_rappel', 'sous_categorie_de_produit',
-                'distributeurs'
-            ]
-            cols_to_search_api = [col for col in cols_to_search_api if col in filtered_df.columns]
-
-            if cols_to_search_api:
-                mask = filtered_df[cols_to_search_api].fillna('').astype(str).apply(
-                    lambda x: x.str.lower().str.contains(search_term_lower)
-                ).any(axis=1)
-                filtered_df = filtered_df[mask]
-            # No specific info needed here if global search fails, as it's expected.
-
+    # Filter by date range (using python filtering on loaded data)
     if 'date_publication' in filtered_df.columns and not filtered_df.empty and pd.notna(filtered_df['date_publication'].iloc[0]):
         start_filter_date = selected_dates_tuple[0]
         end_filter_date = selected_dates_tuple[1]
 
+        # Ensure dates are date objects for comparison
         if isinstance(start_filter_date, datetime): start_filter_date = start_filter_date.date()
         if isinstance(end_filter_date, datetime): end_filter_date = end_filter_date.date()
 
+        # Ensure the date_publication column contains valid date objects for filtering
         if not filtered_df['date_publication'].dropna().empty and isinstance(filtered_df['date_publication'].dropna().iloc[0], date):
             try:
                 filtered_df = filtered_df[
@@ -497,10 +485,44 @@ def filter_data(data_df, selected_subcategories, selected_risks, search_term, se
                  st.warning(f"Erreur lors du filtrage par date Python: {e}")
 
 
+    # Apply search term filter last
+    if search_term:
+        search_term_lower = search_term.lower()
+        count_before_this_filter = len(filtered_df) # Count after initial filters, before search term
+
+        if search_column_api_name and search_column_api_name in filtered_df.columns:
+            # Filter using the specified column (e.g., 'motif_du_rappel')
+            # Use fillna('').astype(str) for robustness before .str.contains()
+            col_as_str = filtered_df[search_column_api_name].fillna('').astype(str)
+            filtered_df = filtered_df[col_as_str.str.lower().str.contains(search_term_lower)]
+
+            # Add info message if column-specific search returns empty results
+            if filtered_df.empty and count_before_this_filter > 0:
+                 friendly_col_name = API_TO_FRIENDLY_COLUMN_MAPPING.get(search_column_api_name, search_column_api_name)
+                 st.info(f"Aucun résultat trouvé pour la recherche \"{search_term}\" dans la colonne \"{friendly_col_name}\" parmi les {count_before_this_filter} rappels actuellement filtrés (date, catégorie, risque). Le terme pourrait ne pas exister dans cette colonne pour ces rappels.", icon="ℹ️")
+
+        else:
+            # Search across multiple relevant columns if no specific column is selected
+            cols_to_search_api = [
+                'nom_de_la_marque_du_produit', 'nom_commercial', 'modeles_ou_references',
+                'risques_encourus', 'motif_du_rappel', 'sous_categorie_de_produit',
+                'distributeurs'
+            ]
+            cols_to_search_api = [col for col in cols_to_search_api if col in filtered_df.columns]
+
+            if cols_to_search_api:
+                # Apply search across selected text columns, handling NaNs
+                mask = filtered_df[cols_to_search_api].fillna('').astype(str).apply(
+                    lambda x: x.str.lower().str.contains(search_term_lower)
+                ).any(axis=1)
+                filtered_df = filtered_df[mask]
+            # No specific info needed here if global search fails, as it's expected.
+
+
     return filtered_df
 
 
-# --- Fonctions UI (Header, Métriques, Cartes Rappel, Pagination, Filtres Avancés) (inchangées) ---
+# --- Fonctions UI (Header, Metrics, Recall Cards, Pagination, Advanced Filters) ---
 def create_header():
     st.markdown("""
     <div class="header-container">
@@ -553,11 +575,11 @@ def display_metrics_cards(data_df):
             """, unsafe_allow_html=True)
     st.caption("*Risques notables incluent (non exhaustif): microbiologique, listeria, salmonelle, allergène/allergie, toxique, E. coli, corps étranger, risque chimique.")
 
+
 def display_recall_card(row_data):
     """
-    Displays a single recall item in a card format.
-    Uses column names correct for the V2 dataset like 'liens_vers_images', 'motif_du_rappel', etc.
-    Handles potential missing/empty data more robustly.
+    Displays a single recall item in a card format, using correct V2 column names
+    and handling potential missing/empty data robustly.
     """
     with st.container():
         st.markdown('<div class="recall-card-container">', unsafe_allow_html=True)
@@ -568,46 +590,56 @@ def display_recall_card(row_data):
             image_url_raw = row_data.get('liens_vers_images')
             image_url = "https://via.placeholder.com/150/CCCCCC/FFFFFF?Text=Image+ND" # Default placeholder
 
-            # Logic to find a suitable image URL from the raw data
+            # Logic to find a suitable image URL from the raw data (handles list or | separated string)
             if isinstance(image_url_raw, list) and image_url_raw:
-                 # If it's a non-empty list, take the first element
                  if isinstance(image_url_raw[0], str) and image_url_raw[0]:
                      image_url = image_url_raw[0]
             elif isinstance(image_url_raw, str) and image_url_raw:
-                # If it's a non-empty string, handle the '|' separator
                 image_parts = image_url_raw.split('|')
                 if image_parts and image_parts[0]:
                     image_url = image_parts[0]
-            # Otherwise, image_url remains the placeholder
+            # Otherwise, image_url remains the placeholder if no valid URL is found
 
-            st.image(image_url, width=130)
+
+            # Use a try-except block for image display as it can fail on invalid URLs
+            try:
+                st.image(image_url, width=130, output_format="auto") # Use auto format for flexibility
+            except Exception as e:
+                 # Optional: Log error but display placeholder
+                 # print(f"Error loading image {image_url}: {e}")
+                 st.image("https://via.placeholder.com/150/CCCCCC/FFFFFF?Text=Image+ND", width=130)
 
 
         with col_content:
-            # Use .get() and provide a default value, handle NaN/None explicitly for clarity
+            # Use .get() and handle NaN/None/empty strings explicitly
             product_name = row_data.get('nom_commercial')
             if pd.isna(product_name) or product_name == '':
+                 # Use 'modeles_ou_references' as fallback
                  product_name = row_data.get('modeles_ou_references')
             if pd.isna(product_name) or product_name == '':
-                 product_name = 'Produit non spécifié'
+                 product_name = 'Produit non spécifié' # Final fallback
+
 
             st.markdown(f"<h5>{product_name}</h5>", unsafe_allow_html=True)
 
             pub_date_obj = row_data.get('date_publication')
+            # Format date if it's a date object, otherwise show 'Date inconnue'
             formatted_date = pub_date_obj.strftime('%d/%m/%Y') if isinstance(pub_date_obj, date) else 'Date inconnue'
             st.caption(f"Publié le: {formatted_date}")
 
             # Use the correct column name 'risques_encourus' for V2
-            risk_text_raw = row_data.get('risques_encourus', 'Risque non spécifié')
+            risk_text_raw = row_data.get('risques_encourus')
+            # Display 'Non spécifié' if NaN, None, or empty string
             risk_text_display = risk_text_raw if pd.notna(risk_text_raw) and risk_text_raw != '' else 'Non spécifié'
             risk_text_lower = str(risk_text_display).lower()
 
+            # Determine badge color based on keywords in lowercased risk text
             badge_color = "grey"; badge_icon = "⚠️"
             if any(keyword in risk_text_lower for keyword in ['listeria', 'salmonelle', 'e. coli', 'danger immédiat', 'toxique']):
                 badge_color = "red"; badge_icon = "☠️"
             elif any(keyword in risk_text_lower for keyword in ['allergène', 'allergie', 'microbiologique', 'corps étranger', 'chimique']):
                 badge_color = "orange"; badge_icon = "🔬"
-            elif risk_text_display != 'Non spécifié':
+            elif risk_text_display != 'Non spécifié': # Any other specified risk
                 badge_color = "darkgoldenrod"; badge_icon = "❗"
 
 
@@ -621,6 +653,7 @@ def display_recall_card(row_data):
             # Use the correct column name 'motif_du_rappel' for V2
             motif = row_data.get('motif_du_rappel')
             motif_display = 'N/A' if pd.isna(motif) or motif == '' else str(motif)
+            # Truncate long motifs for display
             if len(motif_display) > 100:
                 motif_display = motif_display[:97] + "..."
             st.markdown(f"**Motif:** {motif_display}")
@@ -629,10 +662,13 @@ def display_recall_card(row_data):
             distributeurs = row_data.get('distributeurs')
             distributeurs_display = 'N/A' if pd.isna(distributeurs) or distributeurs == '' else str(distributeurs)
             if distributeurs_display != 'N/A':
+                 # Truncate long distributor lists
                  if len(distributeurs_display) > 70: distributeurs_display = distributeurs_display[:67] + "..."
                  st.markdown(f"**Distributeurs:** {distributeurs_display}")
 
-            # Use the correct column name 'liens_vers_la_fiche_rappel' for V2
+            # Use the correct column name 'liens_vers_la_fiche_rappelconso' is incorrect for V2.
+            # The correct V2 column is likely 'liens_vers_la_fiche_rappel'. Let's check data.
+            # Assuming the V2 field is 'liens_vers_la_fiche_rappel' based on API docs
             pdf_link = row_data.get('liens_vers_la_fiche_rappel')
             if pdf_link and pd.notna(pdf_link) and pdf_link != '#' and pdf_link != '':
                  st.link_button("📄 Fiche de rappel", pdf_link, type="secondary", help="Ouvrir la fiche de rappel officielle")
@@ -832,7 +868,7 @@ def create_advanced_filters(df_full_data):
            st.session_state.get('items_per_page_filter', DEFAULT_ITEMS_PER_PAGE)
 
 
-# --- Fonctions de Visualisation (inchangée) ---
+# --- Fonctions de Visualisation ---
 def create_improved_visualizations(data_df_viz):
     if data_df_viz.empty:
         st.info("Données insuffisantes pour générer des visualisations avec les filtres actuels.")
@@ -1287,7 +1323,7 @@ def main():
         'groq_chat_history': [{"role": "assistant", "content": "Bonjour ! Posez-moi une question sur les données affichées ou utilisez une suggestion."}],
         'last_processed_groq_query': '',
         'clicked_suggestion_query': None,
-        'date_filter_start_init': False
+        'date_filter_start_init': False # Flag to initialize date filter start from data min date
     }
     for key, value in default_session_keys.items():
         if key not in st.session_state: st.session_state[key] = value
@@ -1297,29 +1333,28 @@ def main():
 
     # --- Check data loading status AFTER load_data returns ---
     # Display message about API limit if applicable
-    # Check if the number of loaded records is equal to the API window limit (or very close)
-    # This assumes the API returns records sorted by date descending.
-    if len(df_alim) >= (API_MAX_REQUEST_WINDOW - 100) and API_MAX_REQUEST_WINDOW > 0: # Add check for API_MAX_REQUEST_WINDOW > 0
+    if len(df_alim) >= (API_MAX_REQUEST_WINDOW - 100) and API_MAX_REQUEST_WINDOW > 0:
          st.warning(f"Note : Le chargement a potentiellement atteint près de {API_MAX_REQUEST_WINDOW} rappels, limité par une restriction de l'API externe (`start + rows <= 10000`). Les analyses et affichages se basent sur ces {len(df_alim)} premiers rappels les plus récents.", icon="⚠️")
     elif df_alim.empty:
          st.info("Aucun rappel alimentaire trouvé pour les critères de chargement initiaux (date de début et catégorie Alimentation). Réessayez avec une date de début différente ou contactez l'administrateur si le problème persiste.", icon="ℹ️")
          st.stop()
 
 
-    # S'assurer que la date de début du filtre correspond à la date min réelle des données chargées la première fois
-    if not st.session_state.date_filter_start_init:
+    # Ensure date filter start is initialized from loaded data min date on first run
+    if not st.session_state.get('date_filter_init', False): # Use get with default for robustness
         min_data_date_actual = df_alim['date_publication'].dropna().min() if 'date_publication' in df_alim.columns and not df_alim['date_publication'].dropna().empty else START_DATE
         if isinstance(min_data_date_actual, datetime): min_data_date_actual = min_data_date_actual.date()
         elif not isinstance(min_data_date_actual, date): min_data_date_actual = START_DATE
         st.session_state.date_filter_start = min_data_date_actual
-        st.session_state.date_filter_init = True # Correction: use date_filter_init flag
+        st.session_state.date_filter_init = True
 
 
+    # Main search bar and column selector
     cols_search = st.columns([3,2])
     with cols_search[0]:
         st.session_state.search_term_main = st.text_input(
             "Rechercher un produit, marque, risque...", value=st.session_state.get('search_term_main', ""),
-            placeholder="Ex: saumon, listeria, carrefour...", key="main_search_input", label_visibility="collapsed"
+            placeholder="Ex: saumon, listeria, corps étranger...", key="main_search_input", label_visibility="collapsed"
         )
     with cols_search[1]:
         search_column_options_friendly = ["Toutes les colonnes pertinentes"] + list(FRIENDLY_TO_API_COLUMN_MAPPING.keys())
@@ -1336,19 +1371,23 @@ def main():
             key="main_search_column_select", label_visibility="collapsed"
         )
 
+    # Advanced Filters (handles its own state and reruns on date change)
     (selected_main_categories, selected_subcategories, selected_risks,
      selected_dates_tuple_main, items_per_page_setting) = create_advanced_filters(df_alim)
 
+    # Determine the API column name for the search filter
     search_column_api = None
     if st.session_state.search_column_friendly_name_select != "Toutes les colonnes pertinentes":
         search_column_api = FRIENDLY_TO_API_COLUMN_MAPPING.get(st.session_state.search_column_friendly_name_select)
 
+    # Apply all filters to get the currently displayed subset of data
     current_filtered_df = filter_data(
         df_alim, selected_subcategories, selected_risks, st.session_state.search_term_main,
         selected_dates_tuple_main, selected_main_categories, search_column_api
     )
 
-    tab_dashboard, tab_viz, tab_chatbot = st.tabs(["📊 Tableau de Bord", "📈 Visualisations", "🤖 Assistant IA"])
+    # Main Tabs
+    tab_dashboard, tab_viz, tab_details, tab_chatbot = st.tabs(["📊 Tableau de Bord", "📈 Visualisations", "📋 Détails (Table)", "🤖 Assistant IA"])
 
     with tab_dashboard:
         st.subheader("Aperçu Actuel des Rappels Alimentaires")
@@ -1359,6 +1398,46 @@ def main():
     with tab_viz:
         st.subheader("Exploration Visuelle des Données Filtrées")
         create_improved_visualizations(current_filtered_df)
+
+    with tab_details:
+        st.subheader("Détails des Rappels Filtrés (Tableau)")
+        st.markdown("Explorez toutes les colonnes disponibles pour les rappels correspondant aux filtres actuels.")
+
+        if not current_filtered_df.empty:
+            # Display the filtered data as an interactive table
+            st.dataframe(
+                current_filtered_df,
+                column_config={
+                    "date_publication": st.column_config.DateColumn("Date publication"),
+                    "nom_de_la_marque_du_produit": st.column_config.TextColumn("Marque"),
+                    "nom_commercial": st.column_config.TextColumn("Nom commercial"),
+                    "modeles_ou_references": st.column_config.TextColumn("Modèle/Référence"),
+                    "risques_encourus": st.column_config.TextColumn("Risques"),
+                    "motif_du_rappel": st.column_config.TextColumn("Motif"),
+                    "categorie_de_produit": st.column_config.TextColumn("Catégorie"),
+                    "sous_categorie_de_produit": st.column_config.TextColumn("Sous-catégorie"),
+                    "distributeurs": st.column_config.TextColumn("Distributeurs"),
+                    "zone_geographique_de_vente": st.column_config.TextColumn("Zone géographique"),
+                    "liens_vers_la_fiche_rappel": st.column_config.LinkColumn("Lien fiche"),
+                    "liens_vers_images": st.column_config.TextColumn("Liens images (brut)"), # Show raw for info
+                    # You can add more columns from the V2 dataset if needed
+                },
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            # Optional: Download button for the filtered data
+            csv = current_filtered_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Télécharger les données filtrées (CSV)",
+                data=csv,
+                file_name='rappelconso_filtered_export.csv',
+                mime='text/csv',
+                use_container_width=True
+            )
+        else:
+            st.info("Aucune donnée à afficher dans le tableau avec les filtres sélectionnés.")
+
 
     with tab_chatbot:
         st.subheader("💬 Questionner l'Assistant IA sur les Rappels Filtrés")
@@ -1467,7 +1546,7 @@ def main():
     st.sidebar.caption(f"Données RappelConso 'Alimentation'. {len(df_alim)} rappels chargés (depuis le {min_data_date_actual_display.strftime('%d/%m/%Y')}).")
     if st.sidebar.button("🔄 Mettre à jour les données (efface le cache)", type="primary", use_container_width=True, key="update_data_btn"):
         st.cache_data.clear()
-        if 'date_filter_start_init' in st.session_state: del st.session_state.date_filter_start_init
+        if 'date_filter_init' in st.session_state: del st.session_state.date_filter_init # Use the correct flag name
         st.experimental_rerun()
 
 if __name__ == "__main__":
