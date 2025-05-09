@@ -72,6 +72,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Mode debug
+DEBUG = True
+
+def debug_log(message, data=None):
+    """Affiche des informations de débogage"""
+    if DEBUG:
+        with st.expander(f"DEBUG: {message}", expanded=False):
+            st.write(message)
+            if data is not None:
+                if isinstance(data, pd.DataFrame):
+                    st.write(f"Shape: {data.shape}")
+                    st.write(f"Columns: {list(data.columns)}")
+                    st.dataframe(data.head(3))
+                elif isinstance(data, (dict, list)):
+                    st.json(data)
+                else:
+                    st.write(data)
+
 # Fonction de chargement des données (méthode qui fonctionne)
 def load_rappel_data(start_date=None, category="alimentation", max_records=1000):
     """
@@ -144,9 +162,8 @@ def load_rappel_data(start_date=None, category="alimentation", max_records=1000)
     # Créer le DataFrame
     df = pd.DataFrame(all_records)
     
-    # Convertir la date de publication
-    if "date_publication" in df.columns:
-        df["date_publication"] = pd.to_datetime(df["date_publication"], errors="coerce")
+    # Débogage
+    debug_log("DataFrame brut", df)
     
     # Standardiser les noms de colonnes pour l'interface
     column_mapping = {
@@ -159,7 +176,7 @@ def load_rappel_data(start_date=None, category="alimentation", max_records=1000)
         "distributeurs": "distributeurs",
         "liens_vers_les_images": "image",
         "lien_vers_la_fiche_rappel": "fiche_url",
-        "date_publication": "date",
+        "date_publication": "date_str",  # Renommé pour clarté
         "libelle": "nom",
         "id": "id"
     }
@@ -169,9 +186,30 @@ def load_rappel_data(start_date=None, category="alimentation", max_records=1000)
         if old in df.columns:
             df[new] = df[old]
     
+    # Convertir la date de publication en objet date Python
+    if "date_str" in df.columns:
+        # Ajouter une nouvelle colonne 'date' contenant des objets datetime Python
+        df['date'] = pd.to_datetime(df['date_str'], errors='coerce')
+        
+        # Remplacer les valeurs NaT par None
+        df.loc[df['date'].isna(), 'date'] = None
+        
+        debug_log("Dates converties", df[['date_str', 'date']].head())
+    
+    # Débogage
+    debug_log("DataFrame traité", df)
+    
     # Trier par date (plus récent en premier)
     if "date" in df.columns:
-        df = df.sort_values("date", ascending=False)
+        # Trier seulement les lignes avec des dates valides
+        df_with_date = df.dropna(subset=['date'])
+        df_without_date = df[df['date'].isna()]
+        
+        if not df_with_date.empty:
+            df_with_date = df_with_date.sort_values("date", ascending=False)
+            
+        # Recombiner les deux DataFrames
+        df = pd.concat([df_with_date, df_without_date]).reset_index(drop=True)
     
     return df
 
@@ -190,6 +228,8 @@ def display_recall_card(row):
             date_str = date_obj.strftime("%d/%m/%Y")
         else:
             date_str = str(date_obj)
+    elif "date_str" in row and pd.notna(row["date_str"]):
+        date_str = str(row["date_str"])
     
     motif = row.get("motif", "Non spécifié")
     risques = row.get("risques", "Non spécifié")
@@ -303,10 +343,15 @@ def main():
         </div>
         """, unsafe_allow_html=True)
     
-    # Rappels récents (30 derniers jours)
+    # Rappels récents (30 derniers jours) - Gestion robuste des dates
     if "date" in df.columns:
         recent_date = datetime.now() - timedelta(days=30)
-        recent_count = len(df[df["date"] >= recent_date])
+        
+        # Compter manuellement pour éviter les problèmes de comparaison
+        recent_count = 0
+        for _, row in df.iterrows():
+            if pd.notna(row["date"]) and row["date"] >= recent_date:
+                recent_count += 1
         
         with col2:
             st.markdown(f"""
@@ -375,7 +420,7 @@ def main():
             if st.session_state.current_page > 1:
                 if st.button("← Précédent"):
                     st.session_state.current_page -= 1
-                    st.experimental_rerun()
+                    st.rerun()
         
         with col2:
             st.write(f"Page {st.session_state.current_page} sur {total_pages}")
@@ -384,61 +429,82 @@ def main():
             if st.session_state.current_page < total_pages:
                 if st.button("Suivant →"):
                     st.session_state.current_page += 1
-                    st.experimental_rerun()
+                    st.rerun()
     
     with tab2:
         # Visualisations simplifiées
         st.subheader("Visualisations des données")
         
-        # Évolution temporelle des rappels
+        # Évolution temporelle des rappels - Gestion robuste des dates
         if "date" in df.columns:
             st.write("### Évolution des rappels dans le temps")
             
-            # Aggréger par mois
-            df_time = df.copy()
-            df_time["month"] = df_time["date"].dt.to_period("M")
-            monthly_counts = df_time.groupby("month").size().reset_index(name="count")
-            monthly_counts["month_str"] = monthly_counts["month"].astype(str)
+            # Filtrer pour n'utiliser que les lignes avec des dates valides
+            df_time = df.dropna(subset=['date']).copy()
             
-            fig_time = px.line(
-                monthly_counts, 
-                x="month_str", 
-                y="count", 
-                title="Nombre de rappels par mois",
-                labels={"month_str": "Mois", "count": "Nombre de rappels"},
-                markers=True
-            )
-            
-            st.plotly_chart(fig_time, use_container_width=True)
+            if not df_time.empty:
+                # Aggréger par mois
+                df_time["month"] = df_time["date"].dt.strftime('%Y-%m')
+                monthly_counts = df_time.groupby("month").size().reset_index(name="count")
+                
+                # Trier chronologiquement
+                monthly_counts = monthly_counts.sort_values("month")
+                
+                fig_time = px.line(
+                    monthly_counts, 
+                    x="month", 
+                    y="count", 
+                    title="Nombre de rappels par mois",
+                    labels={"month": "Mois", "count": "Nombre de rappels"},
+                    markers=True
+                )
+                
+                st.plotly_chart(fig_time, use_container_width=True)
+            else:
+                st.warning("Pas assez de données temporelles valides pour créer un graphique.")
         
         # Distribution par sous-catégorie
         if "sous_categorie" in df.columns:
             st.write("### Répartition par sous-catégorie")
             
-            top_subcats = df["sous_categorie"].value_counts().nlargest(10)
+            # Filtrer les valeurs NA
+            valid_subcats = df["sous_categorie"].dropna()
             
-            fig_subcat = px.pie(
-                values=top_subcats.values,
-                names=top_subcats.index,
-                title="Top 10 des sous-catégories"
-            )
-            
-            st.plotly_chart(fig_subcat, use_container_width=True)
+            if not valid_subcats.empty:
+                top_subcats = valid_subcats.value_counts().nlargest(10)
+                
+                fig_subcat = px.pie(
+                    values=top_subcats.values,
+                    names=top_subcats.index,
+                    title="Top 10 des sous-catégories"
+                )
+                
+                st.plotly_chart(fig_subcat, use_container_width=True)
+            else:
+                st.warning("Pas de données de sous-catégorie disponibles.")
         
         # Distribution par risque
         if "risques" in df.columns:
             st.write("### Répartition par type de risque")
             
-            top_risks = df["risques"].value_counts().nlargest(10)
+            # Filtrer les valeurs NA
+            valid_risks = df["risques"].dropna()
             
-            fig_risks = px.bar(
-                x=top_risks.index,
-                y=top_risks.values,
-                title="Top 10 des risques",
-                labels={"x": "Type de risque", "y": "Nombre de rappels"}
-            )
-            
-            st.plotly_chart(fig_risks, use_container_width=True)
+            if not valid_risks.empty:
+                top_risks = valid_risks.value_counts().nlargest(10)
+                
+                fig_risks = px.bar(
+                    x=top_risks.index,
+                    y=top_risks.values,
+                    title="Top 10 des risques",
+                    labels={"x": "Type de risque", "y": "Nombre de rappels"}
+                )
+                
+                fig_risks.update_layout(xaxis_tickangle=-45)
+                
+                st.plotly_chart(fig_risks, use_container_width=True)
+            else:
+                st.warning("Pas de données de risque disponibles.")
     
     with tab3:
         # Recherche avancée
@@ -468,7 +534,7 @@ def main():
             if search_results:
                 st.success(f"{len(search_results)} résultats trouvés pour '{search_term}'")
                 
-                for result in search_results[:10]:  # Limiter à 10 résultats affichés
+                for i, result in enumerate(search_results[:10]):  # Limiter à 10 résultats affichés
                     display_recall_card(result)
                 
                 if len(search_results) > 10:
