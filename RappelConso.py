@@ -148,8 +148,9 @@ def debug_log(message, data=None):
         st.sidebar.markdown(f"**DEBUG:** {message}")
         if data is not None:
              # Use a more compact representation for debug data in sidebar
-            st.sidebar.json(data) # Use json for dict/list
-            if isinstance(data, pd.DataFrame):
+            if isinstance(data, (dict, list)):
+                 st.sidebar.json(data) # Use json for dict/list
+            elif isinstance(data, pd.DataFrame):
                 st.sidebar.dataframe(data.head()) # Use dataframe for pandas
             else:
                  st.sidebar.write(data) # Default write for other types
@@ -219,7 +220,7 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
         debug_log(f"Estimation Total Count API (cat: {actual_category_to_load}, date: >={start_date_str}): {total_count}", data)
         
         if total_count == 0:
-            status_text.warning(f"Aucun rappel trouvé avec les filtres de chargement (catégorie: '{actual_category_to_load}').")
+            status_text.warning(f"Aucun rappel trouvé avec les filtres initiaux (catégorie: '{actual_category_to_load}').")
             progress_bar.progress(1.0)
             return pd.DataFrame()
 
@@ -227,6 +228,7 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
         status_text.text(f"Chargement des données ({estimated_fetch_count} maximum)...")
         
         offset = 0
+        # Ajuster la condition de boucle pour s'assurer de ne pas dépasser max_records
         while offset < total_count and len(all_records) < max_records:
             params["offset"] = offset
             params["limit"] = min(100, max_records - len(all_records))
@@ -249,6 +251,7 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
                     all_records.append(record["record"]["fields"])
             
             offset += len(records)
+            # Mettre à jour la progression basée sur le nombre réel d'enregistrements collectés par rapport à max_records
             progress_bar.progress(min(1.0, len(all_records) / max_records))
             
             time.sleep(0.05)
@@ -333,14 +336,21 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
 
     # Assurer que seule la catégorie 'alimentation' est présente si c'est la demande explicite
     # Ce filtre est redondant si le filtre API fonctionne, mais ajoute une sécurité.
-    df = df[df['categorie'] == 'alimentation'].reset_index(drop=True)
-    
+    # Vérifier si la colonne 'categorie' existe avant de filtrer
+    if 'categorie' in df.columns:
+        df = df[df['categorie'] == 'alimentation'].reset_index(drop=True)
+    else:
+        st.warning("La colonne 'categorie' est absente des données. Le filtrage 'alimentation' ne peut pas être appliqué après chargement.")
+
+
     # Débogage final
     debug_log("DataFrame traité et prêt", df.head())
     debug_log("Colonnes après traitement", list(df.columns))
     debug_log("Types de données", df.dtypes)
-    debug_log("Value counts 'categorie' (après filtre)", df['categorie'].value_counts())
-    debug_log("Value counts 'sous_categorie'", df['sous_categorie'].value_counts().head())
+    if 'categorie' in df.columns:
+        debug_log("Value counts 'categorie' (après filtre)", df['categorie'].value_counts())
+    if 'sous_categorie' in df.columns:
+        debug_log("Value counts 'sous_categorie'", df['sous_categorie'].value_counts().head())
     
     return df
 
@@ -390,10 +400,8 @@ def display_recall_card(row):
         # Afficher l'image si disponible, centrée dans la colonne
         if image_url:
             try:
-                # Centrer l'image si possible avec CSS ou layout
-                # Streamlit ne centre pas les images facilement dans les colonnes,
-                # une solution est d'utiliser markdown et HTML pour l'alignement
-                st.markdown(f"<div style='text-align:center;'><img src='{image_url}' width='100'></div>", unsafe_allow_html=True)
+                # Utiliser st.image directement, les ajustements CSS devraient aider au centrage/taille
+                 st.image(image_url, width=100)
             except Exception as e:
                 debug_log(f"Error loading image {image_url}", e)
                 st.info("Image non disponible")
@@ -414,7 +422,15 @@ def display_recall_card(row):
 # Helper function for pagination controls
 def display_pagination_controls(current_page_state_key, total_items, items_per_page):
     """Affiche les boutons de pagination et le numéro de page."""
+    # items_per_page est le nombre de cartes par page (donc 2*items_per_page_per_col si affiché en 2 colonnes)
+    # Dans ce cas, items_per_page est déjà le total par page.
     total_pages = math.ceil(total_items / items_per_page) if total_items > 0 else 1
+
+    # S'assurer que la page actuelle ne dépasse pas le total de pages (peut arriver après filtrage)
+    if st.session_state[current_page_state_key] > total_pages:
+         st.session_state[current_page_state_key] = total_pages
+    if st.session_state[current_page_state_key] < 1:
+         st.session_state[current_page_state_key] = 1
 
     col_prev, col_info, col_next = st.columns([1, 3, 1])
 
@@ -435,6 +451,29 @@ def display_pagination_controls(current_page_state_key, total_items, items_per_p
 
 # --- Fonction principale ---
 def main():
+    # Initialiser les états de session nécessaires avant toute utilisation
+    if "rappel_data" not in st.session_state:
+        st.session_state.rappel_data = None
+    if "load_params" not in st.session_state:
+        st.session_state.load_params = None
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = 1
+    if "search_current_page" not in st.session_state:
+        st.session_state.search_current_page = 1
+    if "selected_subcategories" not in st.session_state:
+        st.session_state.selected_subcategories = ["Toutes"]
+    if "selected_brands" not in st.session_state:
+         st.session_state.selected_brands = ["Toutes"]
+    if "selected_risks" not in st.session_state:
+         st.session_state.selected_risks = ["Tous"]
+    if "quick_search_input" not in st.session_state:
+         st.session_state.quick_search_input = ""
+    if "items_per_page_main" not in st.session_state:
+        st.session_state.items_per_page_main = 10
+    if "items_per_page_search" not in st.session_state:
+        st.session_state.items_per_page_search = 10
+
+
     # En-tête
     st.markdown("""
     <div class="header">
@@ -446,16 +485,9 @@ def main():
     # --- Sidebar pour les filtres de chargement ---
     st.sidebar.title("Paramètres de chargement")
     
-    # Sélection de la catégorie (par défaut sur alimentation et non modifiable si l'objectif est strict)
-    # Si on veut qu'elle soit non modifiable:
+    # Sélection de la catégorie (fixe à alimentation selon la demande)
     st.sidebar.write("Catégorie chargée: **alimentation**")
     selected_category_loading = "alimentation" # <--- Fixe la catégorie pour le chargement
-    # Si on voulait la selectbox modifiable mais par défaut alimentation:
-    # selected_category_loading = st.sidebar.selectbox(
-    #     "Catégorie:",
-    #     options=CATEGORIES,
-    #     index=CATEGORIES.index("alimentation")
-    # )
 
     # Date de début
     start_date = st.sidebar.date_input(
@@ -474,11 +506,6 @@ def main():
     )
     
     # Bouton pour charger les données
-    # Utiliser un état de session pour gérer le chargement
-    if "rappel_data" not in st.session_state:
-        st.session_state.rappel_data = None
-        st.session_state.load_params = None
-
     load_button = st.sidebar.button("Charger/Actualiser les données", type="primary")
 
     # Déterminer si les données doivent être chargées (au premier lancement ou si les paramètres de chargement ont changé)
@@ -502,7 +529,14 @@ def main():
         st.session_state.current_page = 1 # Reset main list pagination
         st.session_state.search_current_page = 1 # Reset search results pagination
         st.session_state.quick_search_input = "" # Clear search input
-        st.sidebar.empty() # Clear the loading message
+
+        st.sidebar.empty() # Clear the loading message (if it was there)
+        # Use st.toast or st.success for feedback after loading
+        if st.session_state.rappel_data is not None and not st.session_state.rappel_data.empty:
+            st.toast("Données chargées avec succès !", icon="✅")
+        else:
+             st.toast("Aucune donnée chargée.", icon="⚠️")
+
         st.rerun() # Rerun pour appliquer le chargement et afficher les données
 
     # Vérifier si les données sont chargées
@@ -518,10 +552,8 @@ def main():
     st.sidebar.title("Filtres d'analyse")
 
     # Filtre Sous-catégorie
-    all_subcategories = ["Toutes"] + sorted(df["sous_categorie"].dropna().unique().tolist())
-    if "selected_subcategories" not in st.session_state:
-        st.session_state.selected_subcategories = ["Toutes"]
-
+    # Utiliser un set pour les options pour éviter les doublons même si dropna est appelé
+    all_subcategories = ["Toutes"] + sorted(set(df["sous_categorie"].dropna().tolist()))
     selected_subcategories = st.sidebar.multiselect(
         "Filtrer par sous-catégorie:",
         options=all_subcategories,
@@ -532,10 +564,7 @@ def main():
 
 
     # Filtre Marque
-    all_brands = ["Toutes"] + sorted(df["marque"].dropna().unique().tolist())
-    if "selected_brands" not in st.session_state:
-         st.session_state.selected_brands = ["Toutes"]
-
+    all_brands = ["Toutes"] + sorted(set(df["marque"].dropna().tolist()))
     selected_brands = st.sidebar.multiselect(
         "Filtrer par marque:",
         options=all_brands,
@@ -546,10 +575,7 @@ def main():
 
 
     # Filtre Risque
-    all_risks = ["Tous"] + sorted(df["risques"].dropna().unique().tolist())
-    if "selected_risks" not in st.session_state:
-         st.session_state.selected_risks = ["Tous"]
-
+    all_risks = ["Tous"] + sorted(set(df["risques"].dropna().tolist()))
     selected_risks = st.sidebar.multiselect(
         "Filtrer par risques encourus:",
         options=all_risks,
@@ -637,16 +663,16 @@ def main():
         st.subheader("Liste des rappels filtrés")
         
         # Slider pour le nombre d'items par page (affecte la pagination principale)
-        items_per_page = st.select_slider(
+        items_per_page_main = st.select_slider(
             "Rappels par page:",
             options=[5, 10, 20, 50],
-            value=st.session_state.get("items_per_page_main", 10), # Maintenir l'état
+            value=st.session_state.items_per_page_main, # Utiliser l'état de session
             key="slider_items_per_page_main"
         )
-        st.session_state.items_per_page_main = items_per_page
+        st.session_state.items_per_page_main = items_per_page_main
 
         # Réinitialiser la page si les filtres changent ou si le nombre d'items par page change
-        current_pagination_state_main = hash((tuple(selected_subcategories), tuple(selected_brands), tuple(selected_risks), items_per_page))
+        current_pagination_state_main = hash((tuple(selected_subcategories), tuple(selected_brands), tuple(selected_risks), items_per_page_main))
         if "pagination_state_main" not in st.session_state or st.session_state.pagination_state_main != current_pagination_state_main:
              st.session_state.current_page = 1
              st.session_state.pagination_state_main = current_pagination_state_main
@@ -654,8 +680,8 @@ def main():
         total_items_main = len(df_filtered)
         
         # Afficher les rappels de la page actuelle en 2 colonnes
-        start_idx_main = (st.session_state.current_page - 1) * items_per_page
-        end_idx_main = min(start_idx_main + items_per_page, total_items_main)
+        start_idx_main = (st.session_state.current_page - 1) * items_per_page_main
+        end_idx_main = min(start_idx_main + items_per_page_main, total_items_main)
 
         if total_items_main > 0:
             # Afficher en 2 colonnes
@@ -670,12 +696,12 @@ def main():
                 if i + 1 < end_idx_main: # Vérifier si le deuxième produit est dans la tranche actuelle
                     with col2:
                          display_recall_card(df_filtered.iloc[i+1])
-                else:
-                    with col2:
-                         st.empty() # S'assurer que la deuxième colonne est vide si pas de second produit
+                # else:
+                #    with col2:
+                #         st.empty() # Streamlit gère les colonnes vides automatiquement
 
             # Afficher les contrôles de pagination pour la liste principale
-            display_pagination_controls("current_page", total_items_main, items_per_page)
+            display_pagination_controls("current_page", total_items_main, items_per_page_main)
 
         else:
             st.info("Aucun rappel à afficher avec les filtres actuels.")
@@ -822,13 +848,14 @@ def main():
             
             if search_cols_existing:
                  # Créer une colonne texte combinée pour la recherche
-                 df_filtered['search_text'] = df_filtered[search_cols_existing].astype(str).fillna('').agg(' '.join, axis=1).str.lower()
+                 # Utiliser .copy() pour éviter SettingWithCopyWarning lors de l'ajout de la colonne 'search_text'
+                 df_filtered_with_search = df_filtered.copy()
+                 df_filtered_with_search['search_text'] = df_filtered_with_search[search_cols_existing].astype(str).fillna('').agg(' '.join, axis=1).str.lower()
 
                  # Appliquer le filtre de recherche
-                 search_results_df = df_filtered[df_filtered['search_text'].str.contains(search_term_lower, na=False)].copy() # Utiliser .copy() pour éviter SettingWithCopyWarning
-                 
-                 # Nettoyer la colonne temporaire de recherche
-                 del df_filtered['search_text']
+                 search_results_df = df_filtered_with_search[df_filtered_with_search['search_text'].str.contains(search_term_lower, na=False)].copy() # Utiliser .copy() ici aussi
+
+                 # La colonne temporaire 'search_text' n'est pas nécessaire dans le df_filtered original
 
             st.markdown(f"**{len(search_results_df)}** résultats trouvés pour '{search_term}' dans les données filtrées.")
 
@@ -841,7 +868,7 @@ def main():
             items_per_page_search = st.select_slider(
                 "Résultats par page:",
                 options=[5, 10, 20, 50],
-                value=st.session_state.get("items_per_page_search", 10), # Maintenir l'état
+                value=st.session_state.items_per_page_search, # Utiliser l'état de session
                 key="slider_items_per_page_search"
             )
             st.session_state.items_per_page_search = items_per_page_search
@@ -870,9 +897,9 @@ def main():
                 if i + 1 < end_idx_search: # Vérifier si le deuxième produit est dans la tranche actuelle
                     with col2:
                          display_recall_card(search_results_df.iloc[i+1])
-                else:
-                    with col2:
-                         st.empty() # S'assurer que la deuxième colonne est vide
+                # else:
+                #     with col2:
+                #          st.empty() # Streamlit gère les colonnes vides automatiquement
 
             # Afficher les contrôles de pagination pour la recherche
             display_pagination_controls("search_current_page", total_items_search, items_per_page_search)
@@ -882,28 +909,15 @@ def main():
         else:
             st.info("Entrez un terme dans la barre de recherche pour afficher les résultats.")
 
+
     # Footer
     st.markdown("""
     <div class="footer">
         RappelConso Insight - Application basée sur les données de <a href="https://www.rappelconso.gouv.fr/" target="_blank">RappelConso.gouv.fr</a>. Données fournies par data.economie.gouv.fr
     </div>
-    """, unsafe_allow_html=html=True)
+    """, unsafe_allow_html=True) # Corrected this line
+
 
 # Exécuter l'application
 if __name__ == "__main__":
-    # Initialiser les états de pagination et de filtres si ce n'est pas déjà fait
-    if "current_page" not in st.session_state:
-        st.session_state.current_page = 1
-    if "search_current_page" not in st.session_state:
-        st.session_state.search_current_page = 1
-    if "selected_subcategories" not in st.session_state:
-        st.session_state.selected_subcategories = ["Toutes"]
-    if "selected_brands" not in st.session_state:
-         st.session_state.selected_brands = ["Toutes"]
-    if "selected_risks" not in st.session_state:
-         st.session_state.selected_risks = ["Tous"]
-    if "quick_search_input" not in st.session_state:
-         st.session_state.quick_search_input = ""
-
-
     main()
