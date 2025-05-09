@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 import requests
-from datetime import datetime, date, timedelta, timezone # Ajout de timezone ici
+from datetime import datetime, date, timedelta, timezone
 import time
 import plotly.express as px
 import numpy as np
-import math # Pour le calcul du nombre de pages
+import math
 
 # --- Configuration de la page ---
 st.set_page_config(
@@ -135,6 +135,20 @@ st.markdown("""
         margin-top: 0px !important; /* Ensure no margin from streamlit image wrapper */
         margin-bottom: 10px; /* Add some space below the image */
     }
+
+    /* Style for download button */
+    .stDownloadButton > button {
+        background-color: #27ae60; /* Green */
+        color: white;
+        border-radius: 8px;
+        padding: 0.75rem 1.5rem;
+        font-size: 1em;
+    }
+     .stDownloadButton > button:hover {
+        background-color: #229954; /* Darker green */
+        color: white;
+    }
+
 
 </style>
 """, unsafe_allow_html=True)
@@ -416,11 +430,12 @@ def display_pagination_controls(current_page_state_key, total_items, items_per_p
     # Dans ce cas, items_per_page est déjà le total par page.
     total_pages = math.ceil(total_items / items_per_page) if total_items > 0 else 1
 
-    # S'assurer que la page actuelle ne dépasse pas le total de pages (peut arriver après filtrage)
+    # S'assurer que la page actuelle ne dépasse pas le total de pages (peut arriver après filtrage ou recherche)
     if st.session_state[current_page_state_key] > total_pages:
          st.session_state[current_page_state_key] = total_pages
     if st.session_state[current_page_state_key] < 1:
          st.session_state[current_page_state_key] = 1
+
 
     col_prev, col_info, col_next = st.columns([1, 3, 1])
 
@@ -602,9 +617,9 @@ def main():
         
         # Afficher les onglets mais avec des messages d'absence de données à l'intérieur
         tab1, tab2, tab3 = st.tabs(["📋 Liste des rappels", "📊 Visualisations", "🔍 Recherche rapide"])
-        with tab1: st.info("Aucun rappel ne correspond aux filtres d'analyse sélectionnés.")
-        with tab2: st.info("Aucune donnée à visualiser avec les filtres d'analyse sélectionnés.")
-        with tab3: st.info("Aucune donnée à rechercher avec les filtres d'analyse sélectionnés.")
+        with tab1: st.info("Aucun rappel à afficher avec les filtres sélectionnés.")
+        with tab2: st.info("Aucune donnée à visualiser avec les filtres sélectionnés.")
+        with tab3: st.info("Aucune donnée à rechercher avec les filtres sélectionnés.")
         
         return # Arrêter l'exécution de main() ici si df_filtered est vide
 
@@ -665,6 +680,18 @@ def main():
                  <div>Marques uniques</div>
              </div>
              """, unsafe_allow_html=True)
+
+    # --- Bouton de téléchargement pour les données filtrées ---
+    if not df_filtered.empty:
+         st.markdown("---") # Séparateur visuel
+         st.download_button(
+             label="Télécharger les données filtrées (CSV)",
+             data=df_filtered.to_csv(index=False).encode('utf-8'),
+             file_name=f'rappelconso_alimentation_depuis_{start_date.strftime("%Y-%m-%d")}_filtered.csv',
+             mime='text/csv',
+             key="download_filtered_csv" # Clé unique
+         )
+         st.markdown("---") # Séparateur visuel
 
 
     # --- Afficher les onglets ---
@@ -845,12 +872,12 @@ def main():
 
     with tab3:
         # Recherche rapide dans les données filtrées
-        st.subheader("Recherche rapide dans les rappels affichés")
+        st.subheader("Recherche rapide dans les rappels affichés (champ: Motif)")
         
         # Utiliser session state pour maintenir la valeur de l'input de recherche
         search_term = st.text_input(
-            "Entrez un terme pour rechercher:",
-            placeholder="Ex: listeria, saumon, Leclerc, verre",
+            "Entrez un terme pour rechercher dans le Motif du rappel:",
+            placeholder="Ex: listéria, salmonelle, corps étranger",
             key="quick_search_input" # Clé unique
         )
 
@@ -859,15 +886,14 @@ def main():
         if search_term:
             search_term_lower = search_term.lower()
             
-            # Colonnes sur lesquelles effectuer la recherche rapide
-            search_cols = ["nom", "marque", "motif", "risques", "sous_categorie", "distributeurs", "zone_vente"]
+            # Colonnes sur lesquelles effectuer la recherche rapide : UNIQUEMENT LE MOTIF
+            search_cols = ["motif"]
             search_cols_existing = [col for col in search_cols if col in df_filtered.columns]
             
             if search_cols_existing:
-                 # Créer une colonne texte combinée pour la recherche
-                 # Utiliser .copy() pour éviter SettingWithCopyWarning lors de l'ajout de la colonne 'search_text'
+                 # Créer une colonne texte combinée pour la recherche (ici, juste le motif)
                  df_filtered_with_search = df_filtered.copy()
-                 # Concaténer seulement les colonnes existantes et gérées
+                 # Concaténer seulement les colonnes existantes et gérées (ici, juste 'motif')
                  df_filtered_with_search['search_text'] = df_filtered_with_search[search_cols_existing].astype(str).fillna('').agg(' '.join, axis=1).str.lower()
 
                  # Appliquer le filtre de recherche
@@ -875,7 +901,7 @@ def main():
 
                  # La colonne temporaire 'search_text' n'est pas nécessaire dans le df_filtered original
 
-            st.markdown(f"**{len(search_results_df)}** résultats trouvés pour '{search_term}' dans les données filtrées.")
+            st.markdown(f"**{len(search_results_df)}** résultats trouvés pour '{search_term}' dans le Motif.")
 
         if search_term and not search_results_df.empty:
             # --- Pagination pour les résultats de recherche ---
@@ -893,9 +919,13 @@ def main():
 
             # Réinitialiser la page de recherche si le terme de recherche ou items_per_page_search change
             current_pagination_state_search = hash((search_term_lower, items_per_page_search))
-            if "pagination_state_search" not in st.session_state or st.session_state.pagination_state_search != current_pagination_state_search:
+            # Ne réinitialiser que si le terme de recherche change *et* qu'il n'est pas vide
+            if (st.session_state.get("last_search_term", "") != search_term_lower and search_term_lower != "") or \
+               ("pagination_state_search" not in st.session_state or st.session_state.pagination_state_search != current_pagination_state_search):
                  st.session_state.search_current_page = 1
                  st.session_state.pagination_state_search = current_pagination_state_search
+            st.session_state.last_search_term = search_term_lower # Mettre à jour le dernier terme recherché
+
 
             total_items_search = len(search_results_df)
 
@@ -926,9 +956,9 @@ def main():
             display_pagination_controls("search_current_page", total_items_search, items_per_page_search)
 
         elif search_term:
-             st.warning(f"Aucun résultat trouvé pour '{search_term}' dans les données filtrées.")
+             st.warning(f"Aucun résultat trouvé pour '{search_term}' dans le Motif.")
         else:
-            st.info("Entrez un terme dans la barre de recherche pour afficher les résultats.")
+            st.info("Entrez un terme dans la barre de recherche pour afficher les résultats (recherche limitée au Motif).")
 
 
     # Footer
@@ -936,7 +966,7 @@ def main():
     <div class="footer">
         RappelConso Insight - Application basée sur les données de <a href="https://www.rappelconso.gouv.fr/" target="_blank">RappelConso.gouv.fr</a>. Données fournies par data.economie.gouv.fr
     </div>
-    """, unsafe_allow_html=True) # Corrected the syntax error here
+    """, unsafe_allow_html=True)
 
 
 # Exécuter l'application
