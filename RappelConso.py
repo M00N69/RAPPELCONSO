@@ -1840,7 +1840,7 @@ def main():
 
     # Toggle pour activer/désactiver le mode debug
     st.sidebar.markdown("---")
-    debug_expander = st.sidebar.expander("Options avancées de l'application", expanded=False): # Renamed expander
+    debug_expander = st.sidebar.expander("Options avancées de l'application", expanded=False) # Renamed expander
         st.session_state.debug_mode = st.checkbox("Mode débogage", value=st.session_state.debug_mode, help="Affiche des informations techniques pour le diagnostic des problèmes.")
         if st.session_state.debug_mode:
             st.info("Mode débogage activé. Des informations supplémentaires seront affichées en dessous des sections pertinentes.")
