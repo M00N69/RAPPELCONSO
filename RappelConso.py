@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone # Ajout de timezone ici
 import time
 import plotly.express as px
 import numpy as np
@@ -202,11 +202,16 @@ def load_rappel_data(start_date: date = None, category: str = "", max_records: i
         status_text.text(f"Chargement des données RappelConso ({estimated_fetch_count} maximum)...")
         
         offset = 0
-        while offset < estimated_fetch_count and len(all_records) < max_records:
+        # Ajuster la condition de boucle pour s'assurer de ne pas dépasser max_records
+        while offset < total_count and len(all_records) < max_records:
             params["offset"] = offset
             
             # Assurez-vous de ne pas demander plus que max_records dans la dernière page
             params["limit"] = min(100, max_records - len(all_records))
+
+            # Si la limite devient 0 ou moins, c'est qu'on a déjà atteint max_records
+            if params["limit"] <= 0:
+                 break
 
             response = requests.get(api_url, params=params, timeout=30)
             response.raise_for_status()
@@ -223,13 +228,15 @@ def load_rappel_data(start_date: date = None, category: str = "", max_records: i
                     all_records.append(record["record"]["fields"])
             
             offset += len(records)
+            # Mettre à jour la progression basée sur le nombre réel d'enregistrements collectés par rapport à max_records
             progress_bar.progress(min(1.0, len(all_records) / max_records))
             
             # Petite pause pour éviter de surcharger l'API
             time.sleep(0.05)
             
+            # Vérifier si la limite max_records est atteinte après avoir ajouté les records
             if len(all_records) >= max_records:
-                 status_text.info(f"Limite de {max_records} enregistrements atteinte (sur {total_count} potentiels disponibles via API).")
+                 status_text.info(f"Limite de {max_records} enregistrements atteinte.")
                  break
 
     except requests.exceptions.Timeout:
@@ -241,11 +248,14 @@ def load_rappel_data(start_date: date = None, category: str = "", max_records: i
         progress_bar.empty()
         return pd.DataFrame()
     except Exception as e:
-        status_text.error(f"Une erreur inattendue est survenue: {e}")
+        status_text.error(f"Une erreur inattendue est survenue lors du chargement: {e}")
         progress_bar.empty()
         return pd.DataFrame()
 
     finally:
+        # Assurez-vous que la progression atteint 100% même si on s'arrête avant total_count à cause de max_records
+        if len(all_records) > 0:
+             progress_bar.progress(1.0)
         status_text.empty() # Nettoyer le texte de statut
         progress_bar.empty() # Nettoyer la barre de progression
     
@@ -282,28 +292,30 @@ def load_rappel_data(start_date: date = None, category: str = "", max_records: i
     
     # Convertir la colonne date_raw en datetime et extraire la date pour affichage
     if "date_raw" in df.columns:
-        # Convertir en datetime, coercer les erreurs en NaT (Not a Time)
+        # Convertir en datetime, coercer les erreurs en NaT (Not a Time) et s'assurer qu'ils sont en UTC
         df['date'] = pd.to_datetime(df['date_raw'], errors='coerce', utc=True)
         # Extraire la partie date pour l'affichage (ignorer le timezeone pour la conversion str)
         df['date_str'] = df['date'].dt.strftime('%Y-%m-%d')
     else:
-        df['date'] = pd.NaT # Add dummy datetime col
+        df['date'] = pd.NaT # Add dummy datetime col if date_raw is missing
         df['date_str'] = "Date manquante"
 
     # Extraire la première URL d'image si plusieurs sont présentes
     if "image_urls_raw" in df.columns:
-         df['image_url'] = df['image_urls_raw'].apply(lambda x: x.split('|')[0].strip() if isinstance(x, str) and x.strip() else None)
+         df['image_url'] = df['image_urls_raw'].apply(lambda x: str(x).split('|')[0].strip() if pd.notna(x) and str(x).strip() else None)
     else:
          df['image_url'] = None # Add dummy image col
 
-    # Trier par date (plus récent en premier)
+    # Trier par date (plus récent en premier) - Gérer les NaT
     if "date" in df.columns:
-        df = df.sort_values("date", ascending=False).reset_index(drop=True)
+        df = df.sort_values("date", ascending=False, na_position='last').reset_index(drop=True)
     
     # Débogage final
     debug_log("DataFrame traité et prêt", df.head())
     debug_log("Colonnes après traitement", list(df.columns))
     debug_log("Types de données", df.dtypes)
+    debug_log("Value counts 'categorie'", df['categorie'].value_counts().head())
+    debug_log("Value counts 'sous_categorie'", df['sous_categorie'].value_counts().head())
     
     return df
 
@@ -312,11 +324,11 @@ def get_risk_class(risques):
     """Détermine la classe CSS en fonction des risques mentionnés."""
     if isinstance(risques, str):
         risques_lower = risques.lower()
-        if any(kw in risques_lower for kw in ["listeria", "salmonelle", "e. coli", "toxique", "dangereux", "mortel"]):
+        if any(kw in risques_lower for kw in ["listeria", "salmonelle", "e. coli", "toxique", "dangereux", "mortel", "blessures graves"]):
             return "risk-high"
-        elif any(kw in risques_lower for kw in ["allergène", "microbiologique", "corps étranger", "chimique", "blessures", "intoxication"]):
+        elif any(kw in risques_lower for kw in ["allergène", "microbiologique", "corps étranger", "chimique", "blessures", "intoxication", "dépassement de seuils"]):
             return "risk-medium"
-    return "risk-low" # Default or for less severe risks
+    return "risk-low" # Default or for less severe risks like odor/taste or minor defects
 
 # Fonction pour afficher une carte de rappel
 def display_recall_card(row):
@@ -357,7 +369,10 @@ def display_recall_card(row):
     with col_img:
         if image_url:
             try:
+                # Ajouter une petite marge en haut de l'image si elle est présente
+                st.markdown("<div style='margin-top: 10px;'>", unsafe_allow_html=True)
                 st.image(image_url, width=100)
+                st.markdown("</div>", unsafe_allow_html=True)
             except:
                 st.info("Image non disponible")
         else:
@@ -422,14 +437,22 @@ def main():
     # Déterminer si les données doivent être chargées (au premier lancement ou si les paramètres de chargement ont changé)
     current_load_params = (selected_category, start_date, max_records)
     
+    # Charger les données si le bouton est cliqué OU si c'est la première exécution ET qu'aucun paramètre n'est enregistré
     if load_button or (st.session_state.rappel_data is None and st.session_state.load_params is None):
-        # Charger les données si le bouton est cliqué ou si c'est la première exécution
         st.session_state.rappel_data = load_rappel_data(
             start_date=start_date,
             category=selected_category,
             max_records=max_records
         )
         st.session_state.load_params = current_load_params # Sauvegarder les paramètres utilisés
+        # Réinitialiser les filtres d'analyse post-chargement à "Toutes" après un nouveau chargement
+        st.session_state.selected_subcategories = ["Toutes"]
+        st.session_state.selected_brands = ["Toutes"]
+        st.session_state.selected_risks = ["Tous"]
+        st.session_state.current_page = 1 # Reset pagination on new load
+        # Rerun pour appliquer le chargement et afficher les données
+        st.rerun()
+
 
     # Vérifier si les données sont chargées
     if st.session_state.rappel_data is None or st.session_state.rappel_data.empty:
@@ -445,27 +468,43 @@ def main():
 
     # Filtre Sous-catégorie
     all_subcategories = ["Toutes"] + sorted(df["sous_categorie"].dropna().unique().tolist())
+    # Utiliser st.session_state pour maintenir la sélection entre les runs
+    if "selected_subcategories" not in st.session_state:
+        st.session_state.selected_subcategories = ["Toutes"]
+
     selected_subcategories = st.sidebar.multiselect(
         "Filtrer par sous-catégorie:",
         options=all_subcategories,
-        default="Toutes"
+        default=st.session_state.selected_subcategories # Utiliser la valeur par défaut de la session
     )
+    st.session_state.selected_subcategories = selected_subcategories # Sauvegarder la sélection
+
 
     # Filtre Marque
     all_brands = ["Toutes"] + sorted(df["marque"].dropna().unique().tolist())
+    if "selected_brands" not in st.session_state:
+         st.session_state.selected_brands = ["Toutes"]
+
     selected_brands = st.sidebar.multiselect(
         "Filtrer par marque:",
         options=all_brands,
-        default="Toutes"
+        default=st.session_state.selected_brands # Utiliser la valeur par défaut de la session
     )
+    st.session_state.selected_brands = selected_brands # Sauvegarder la sélection
+
 
     # Filtre Risque
     all_risks = ["Tous"] + sorted(df["risques"].dropna().unique().tolist())
+    if "selected_risks" not in st.session_state:
+         st.session_state.selected_risks = ["Tous"]
+
     selected_risks = st.sidebar.multiselect(
         "Filtrer par risques encourus:",
         options=all_risks,
-        default="Tous"
+        default=st.session_state.selected_risks # Utiliser la valeur par défaut de la session
     )
+    st.session_state.selected_risks = selected_risks # Sauvegarder la sélection
+
     
     # Appliquer les filtres post-chargement
     df_filtered = df.copy()
@@ -482,6 +521,13 @@ def main():
     # Vérifier si le DataFrame filtré est vide
     if df_filtered.empty:
         st.warning("Aucun rappel ne correspond aux filtres d'analyse sélectionnés.")
+        # Afficher les métriques basées sur le df *chargé* quand même ? Ou les masquer ?
+        # On peut afficher 0 pour les métriques basées sur df_filtered
+        col1, col2, col3, col4 = st.columns(4)
+        with col1: st.markdown(f"""<div class="metric"><div class="metric-value">{len(df)}</div><div>Rappels chargés</div></div>""", unsafe_allow_html=True)
+        with col2: st.markdown(f"""<div class="metric"><div class="metric-value">0</div><div>Rappels affichés</div></div>""", unsafe_allow_html=True)
+        with col3: st.markdown(f"""<div class="metric"><div class="metric-value">0</div><div>Rappels (30 derniers jours)</div></div>""", unsafe_allow_html=True)
+        with col4: st.markdown(f"""<div class="metric"><div class="metric-value">0</div><div>Marques uniques</div></div>""", unsafe_allow_html=True)
         return
 
     # --- Afficher quelques métriques ---
@@ -508,8 +554,9 @@ def main():
 
     # Rappels récents (calculés sur les données filtrées)
     # Utiliser la colonne 'date' qui est datetime
-    today = datetime.now().tz_localize('UTC') # Comparer avec un datetime UTC
-    recent_recalls = df_filtered[df_filtered['date'] >= (today - timedelta(days=30))]
+    # CORRECTION ICI : Utiliser datetime.now(tz=timezone.utc)
+    today = datetime.now(tz=timezone.utc) # Comparer avec un datetime UTC
+    recent_recalls = df_filtered[df_filtered['date'].dropna() >= (today - timedelta(days=30))] # Ajouter dropna() pour éviter les erreurs avec NaT
     recent_count = len(recent_recalls)
     
     with col3:
@@ -522,7 +569,8 @@ def main():
     
     # Nombre de marques uniques dans les données filtrées
     if "marque" in df_filtered.columns:
-        brand_count_filtered = df_filtered["marque"].nunique()
+        # Ajouter dropna() pour compter uniquement les marques non nulles
+        brand_count_filtered = df_filtered["marque"].dropna().nunique()
         with col4:
             st.markdown(f"""
             <div class="metric">
@@ -571,6 +619,7 @@ def main():
         end_idx = min(start_idx + items_per_page, total_items)
 
         if total_items > 0:
+            # Afficher les rappels de la page actuelle
             for i in range(start_idx, end_idx):
                 display_recall_card(df_filtered.iloc[i])
             
@@ -578,17 +627,19 @@ def main():
             col_prev, col_info, col_next = st.columns([1, 3, 1])
             
             with col_prev:
+                # Utiliser un key unique pour le bouton si nécessaire dans certains scénarios
                 if st.session_state.current_page > 1:
-                    if st.button("← Précédent"):
+                    if st.button("← Précédent", key="btn_prev_page"):
                         st.session_state.current_page -= 1
                         st.rerun() # Rerun pour actualiser la page affichée
-            
+        
             with col_info:
                 st.markdown(f"<div style='text-align:center;'>Page {st.session_state.current_page} sur {total_pages}</div>", unsafe_allow_html=True)
             
             with col_next:
+                # Utiliser un key unique
                 if st.session_state.current_page < total_pages:
-                    if st.button("Suivant →"):
+                    if st.button("Suivant →", key="btn_next_page"):
                         st.session_state.current_page += 1
                         st.rerun() # Rerun pour actualiser la page affichée
         else:
@@ -601,11 +652,19 @@ def main():
         # Évolution temporelle des rappels
         st.write("### Évolution des rappels par mois")
         
-        if "date" in df_filtered.columns and not df_filtered["date"].isna().all():
+        # Filtrer les lignes avec date NaT avant de grouper
+        df_filtered_valid_dates = df_filtered.dropna(subset=['date'])
+
+        if "date" in df_filtered_valid_dates.columns and not df_filtered_valid_dates.empty:
             try:
                 # Grouper par mois en utilisant la colonne datetime
-                monthly_counts = df_filtered.set_index("date").resample("MS").size().reset_index(name="count")
-                monthly_counts["month_str"] = monthly_counts["date"].dt.strftime("%Y-%m") # Format pour l'axe
+                # Utiliser .dt.to_period('M') pour grouper par mois calendaire
+                monthly_counts = df_filtered_valid_dates.groupby(df_filtered_valid_dates['date'].dt.to_period('M')).size().reset_index(name="count")
+                # Convertir la période en string pour l'affichage sur l'axe
+                monthly_counts["month_str"] = monthly_counts["date"].astype(str)
+                
+                # Trier chronologiquement les mois
+                monthly_counts = monthly_counts.sort_values("month_str")
 
                 if not monthly_counts.empty:
                     fig_time = px.line(
@@ -616,25 +675,26 @@ def main():
                         labels={"month_str": "Mois", "count": "Nombre de rappels"},
                         markers=True
                     )
-                    fig_time.update_layout(xaxis_title="Mois", yaxis_title="Nombre de rappels")
+                    fig_time.update_layout(xaxis_title="Mois", yaxis_title="Nombre de rappels", hovermode="x unified") # Améliorer le survol
                     st.plotly_chart(fig_time, use_container_width=True)
                 else:
                     st.warning("Pas assez de données temporelles valides pour créer un graphique.")
             except Exception as e:
                 st.error(f"Erreur lors de la création du graphique temporel: {str(e)}")
         else:
-            st.warning("La colonne de date n'est pas disponible ou contient des valeurs manquantes.")
+            st.info("La colonne de date n'est pas disponible ou contient des valeurs manquantes dans les données filtrées.")
 
 
         # Distribution par sous-catégorie
         if "sous_categorie" in df_filtered.columns:
             st.write("### Répartition par sous-catégorie")
             
+            # Filtrer les valeurs NA
             valid_subcats = df_filtered["sous_categorie"].dropna()
             
             if not valid_subcats.empty:
                 # Afficher les top N sous-catégories (modifiable par l'utilisateur ?)
-                num_top_subcats = st.slider("Nombre de sous-catégories à afficher:", 5, 30, 10)
+                num_top_subcats = st.slider("Nombre de sous-catégories à afficher:", 5, 30, 10, key="subcat_slider")
                 top_subcats = valid_subcats.value_counts().nlargest(num_top_subcats)
                 
                 fig_subcat = px.pie(
@@ -652,6 +712,7 @@ def main():
         if "risques" in df_filtered.columns:
             st.write("### Répartition par type de risque")
             
+            # Filtrer les valeurs NA
             valid_risks = df_filtered["risques"].dropna()
             
             if not valid_risks.empty:
@@ -664,14 +725,15 @@ def main():
 
                 # Mapper les classes CSS aux libellés
                 risk_counts['risk_level_label'] = risk_counts['risk_level'].map({
-                    'risk-high': 'Élevé',
-                    'risk-medium': 'Moyen',
-                    'risk-low': 'Faible'
+                     'risk-high': 'Risque Élevé',
+                     'risk-medium': 'Risque Moyen',
+                     'risk-low': 'Risque Faible'
                 })
                 
                 # Définir l'ordre des niveaux de risque pour le tri
-                risk_level_order = ['Élevé', 'Moyen', 'Faible']
+                risk_level_order = ['Risque Élevé', 'Risque Moyen', 'Risque Faible']
                 risk_counts['risk_level_label'] = pd.Categorical(risk_counts['risk_level_label'], categories=risk_level_order, ordered=True)
+                # Trier d'abord par niveau de risque, puis par nombre de rappels
                 risk_counts = risk_counts.sort_values(['risk_level_label', 'count'], ascending=[True, False])
 
                 fig_risks = px.bar(
@@ -679,12 +741,12 @@ def main():
                     x="risk",
                     y="count",
                     title="Répartition par type de risque",
-                    labels={"risk": "Type de risque", "count": "Nombre de rappels"},
+                    labels={"risk": "Type de risque", "count": "Nombre de rappels", "risk_level_label": "Niveau de risque"},
                     color="risk_level_label", # Colorer par niveau de risque
                     color_discrete_map={
-                         'Élevé': '#e74c3c',
-                         'Moyen': '#f39c12',
-                         'Faible': '#27ae60'
+                         'Risque Élevé': '#e74c3c',
+                         'Risque Moyen': '#f39c12',
+                         'Risque Faible': '#27ae60'
                     }
                 )
                 
@@ -728,6 +790,7 @@ def main():
             
             # Créer une colonne texte combinée pour la recherche
             # Utiliser str() pour gérer les types mixtes et fillna pour éviter les NaNs
+            # Assurez-vous que toutes les colonnes sélectionnées existent dans df_filtered
             df_filtered['search_text'] = df_filtered[search_cols_existing].astype(str).fillna('').agg(' '.join, axis=1).str.lower()
 
             # Appliquer le filtre de recherche
@@ -737,8 +800,18 @@ def main():
 
             if not search_results_df.empty:
                 # Afficher les résultats (on peut ajouter de la pagination ici aussi si nécessaire)
-                for index, row in search_results_df.iterrows():
-                    display_recall_card(row)
+                # Limiter l'affichage si beaucoup de résultats, ou ajouter pagination
+                num_search_results = len(search_results_df)
+                max_display_search = 50 # Limiter à 50 résultats dans la recherche rapide pour la lisibilité
+
+                if num_search_results > max_display_search:
+                     st.info(f"Affichage des {max_display_search} premiers résultats sur {num_search_results} trouvés.")
+
+                for i in range(min(num_search_results, max_display_search)):
+                     display_recall_card(search_results_df.iloc[i])
+
+                # Optionnel: ajouter pagination pour la recherche si > max_display_search
+
             else:
                 st.warning(f"Aucun résultat trouvé pour '{search_term}' dans les données filtrées.")
         else:
