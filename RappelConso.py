@@ -4,20 +4,17 @@ import requests
 from datetime import datetime, date, timedelta
 import time
 
-# Fonction de débogage simplifiée
+# Fonction de débogage
 def debug_log(message, data=None):
     if st.session_state.get("debug_mode", False):
         st.sidebar.markdown(f"**DEBUG:** {message}")
         if data is not None:
             st.sidebar.write(data)
 
-# Fonction pour tester directement l'API
+# Test de connexion à l'API
 def test_api_connection():
-    """Teste une connexion simple à l'API"""
     try:
-        # URL plus simple pour le test
         test_url = "https://data.economie.gouv.fr/api/v2/catalog/datasets/rappelconso-v2-gtin-espaces/records?limit=1"
-        
         debug_log("Test de connexion API avec URL minimale", test_url)
         
         response = requests.get(test_url, timeout=30)
@@ -30,18 +27,16 @@ def test_api_connection():
         else:
             st.sidebar.warning("⚠️ Connexion API OK mais aucune donnée reçue")
             return True
-        
     except Exception as e:
         st.sidebar.error(f"❌ Erreur de connexion API: {str(e)}")
         return False
 
-# Fonction améliorée pour charger les données
-def load_rappelconso_data():
-    """Charge les données de l'API RappelConso avec une gestion d'erreurs améliorée"""
+# Fonction principale de chargement des données
+def load_rappelconso_data(category_filter="Alimentation"):
+    """Charge les données de l'API RappelConso pour une catégorie spécifique"""
     
-    # Vérifier d'abord que l'API est accessible
     if not test_api_connection():
-        st.error("Impossible de se connecter à l'API RappelConso. Vérifiez votre connexion internet.")
+        st.error("Impossible de se connecter à l'API RappelConso.")
         return pd.DataFrame()
     
     try:
@@ -54,45 +49,36 @@ def load_rappelconso_data():
             start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
         end_date = date.today()
         
-        # Construction de la requête (MODIFIÉE pour résoudre les problèmes)
-        # 1. Utiliser des guillemets doubles pour les chaînes
-        # 2. Format de date ISO sans guillemets
-        # 3. Retirer l'ordre de tri pour simplifier
+        # Construction de la requête avec filtre précis de catégorie
         query_params = {
-            # Solution 1: Utiliser le format q= avec une syntaxe plus simple
-            "q": "Alimentation",  # Recherche simple par terme
-            
-            # Date range using q filter (technique alternative)
-            # "refine.date_publication": f">={start_date.strftime('%Y-%m-%d')}",
-            
-            # Limit and offset still needed
+            "where": f'categorie_produit="{category_filter}"',  # Filtre exact
             "limit": 100,
             "offset": 0
         }
         
-        debug_log("Requête API avec paramètres simplifiés", query_params)
+        debug_log("Requête API avec filtre de catégorie", query_params)
         
-        # Effectuer la requête
+        # Requête initiale pour obtenir le nombre total
         with st.spinner("Test de récupération initiale de données..."):
             response = requests.get(api_url, params=query_params, timeout=30)
             response.raise_for_status()
             initial_data = response.json()
         
-        # Vérifier si nous avons des résultats
+        # Vérifier le nombre total
         total_count = initial_data.get("total_count", 0)
-        debug_log(f"Requête de test réussie. Total enregistrements: {total_count}")
+        debug_log(f"Requête de test réussie. Total enregistrements '{category_filter}': {total_count}")
         
         if total_count == 0:
-            st.warning("Aucun rappel trouvé avec la requête de test.")
+            st.warning(f"Aucun rappel trouvé pour la catégorie '{category_filter}'.")
             return pd.DataFrame()
         
-        # Si la requête simple fonctionne, nous pouvons récupérer plus de données
+        # Récupérer toutes les données par pages
         all_records = []
         total_fetched = 0
         page_size = 100
-        max_records = 5000  # Limiter le nombre total pour éviter des problèmes de mémoire
+        max_records = 10000  # Augmenté pour avoir plus de données
         
-        # Initialiser la barre de progression
+        # Barre de progression
         progress_text = st.empty()
         progress_bar = st.progress(0)
         
@@ -102,7 +88,7 @@ def load_rappelconso_data():
             query_params["limit"] = page_size
             
             try:
-                progress_text.text(f"Chargement des données {offset+1}-{min(offset+page_size, total_count)} sur {total_count}...")
+                progress_text.text(f"Chargement des rappels {offset+1}-{min(offset+page_size, total_count)} sur {total_count}...")
                 response = requests.get(api_url, params=query_params, timeout=30)
                 response.raise_for_status()
                 
@@ -113,18 +99,16 @@ def load_rappelconso_data():
                     debug_log(f"Pas de records à l'offset {offset}", None)
                     break
                 
-                # Extraire les données des records
+                # Extraction des champs
                 for record in page_records:
                     if "record" in record and "fields" in record["record"]:
                         all_records.append(record["record"]["fields"])
-                    else:
-                        debug_log(f"Structure record inattendue à l'index {len(all_records)}", record)
                 
                 total_fetched += len(page_records)
                 progress_bar.progress(min(1.0, total_fetched / min(total_count, max_records)))
                 
                 offset += len(page_records)
-                time.sleep(0.1)  # Pause courte pour éviter de surcharger l'API
+                time.sleep(0.1)
                 
                 if total_fetched >= max_records:
                     debug_log(f"Limite de {max_records} enregistrements atteinte")
@@ -134,7 +118,7 @@ def load_rappelconso_data():
                 debug_log(f"Erreur lors du chargement de la page à l'offset {offset}", str(e))
                 break
         
-        # Effacer la barre de progression
+        # Nettoyer les éléments UI temporaires
         progress_text.empty()
         progress_bar.empty()
         
@@ -155,25 +139,27 @@ def load_rappelconso_data():
             "motif_rappel": "motif_du_rappel",
             "liens_vers_les_images": "liens_vers_images",
             "lien_vers_la_fiche_rappel": "lien_vers_la_fiche_rappel",
-            "date_publication": "date_publication"
         }
         
         # Appliquer le mapping des colonnes existantes
         for old_col, new_col in column_mapping.items():
             if old_col in df.columns:
                 df[new_col] = df[old_col]
-                if old_col != new_col:  # Éviter de supprimer une colonne qui vient d'être créée
+                if old_col != new_col:
                     df = df.drop(columns=[old_col])
         
-        # Vérifier si la colonne date_publication existe
+        # Gestion des dates corrigée
         if "date_publication" in df.columns:
             try:
-                # Convertir en datetime et filtrer par date
-                df["date_publication"] = pd.to_datetime(df["date_publication"], errors="coerce")
+                debug_log("Traitement des dates...", None)
+                # Convertir en datetime sans timezone
+                df["date_publication"] = pd.to_datetime(df["date_publication"], errors="coerce").dt.tz_localize(None)
                 
-                # Filtrer pour la plage de dates, si nécessaire
-                start_date_dt = pd.Timestamp(start_date)
-                end_date_dt = pd.Timestamp(end_date)
+                # Filtrer par date
+                start_date_dt = pd.Timestamp(start_date).tz_localize(None)
+                end_date_dt = pd.Timestamp(end_date).tz_localize(None)
+                
+                # Appliquer le filtre de date
                 df = df[(df["date_publication"] >= start_date_dt) & 
                          (df["date_publication"] <= end_date_dt)]
                 
@@ -182,11 +168,18 @@ def load_rappelconso_data():
                 
                 # Tri par date
                 df = df.sort_values("date_publication", ascending=False)
+                
+                debug_log("Traitement des dates réussi", None)
             except Exception as date_error:
                 debug_log("Erreur lors du traitement des dates", str(date_error))
+                import traceback
+                debug_log("Traceback", traceback.format_exc())
         
-        # Afficher des statistiques de base
-        st.success(f"✅ {len(df)} rappels chargés avec succès!")
+        # Afficher des statistiques
+        st.success(f"✅ {len(df)} rappels de catégorie '{category_filter}' chargés avec succès!")
+        
+        # Sauvegarder dans la session state
+        st.session_state.rappels_df = df
         
         return df
         
@@ -195,87 +188,122 @@ def load_rappelconso_data():
         if hasattr(http_err, 'response'):
             debug_log("Détails de l'erreur HTTP", {
                 "status_code": http_err.response.status_code,
-                "headers": dict(http_err.response.headers),
                 "content": http_err.response.text[:500] + "..." if len(http_err.response.text) > 500 else http_err.response.text
             })
         return pd.DataFrame()
     except Exception as e:
         st.error(f"Erreur lors du chargement des données: {str(e)}")
+        import traceback
+        debug_log("Traceback", traceback.format_exc())
         return pd.DataFrame()
 
-# Interface utilisateur simplifiée pour tester
-st.title("Test de chargement API RappelConso")
+# Fonction pour afficher les statistiques de base
+def show_basic_stats(df):
+    """Affiche des statistiques de base sur les données chargées"""
+    st.header("📊 Aperçu des données")
+    
+    # Onglets pour différentes vues
+    tab1, tab2, tab3 = st.tabs(["Aperçu", "Statistiques", "Distribution"])
+    
+    with tab1:
+        st.write(f"**Nombre total de rappels:** {len(df)}")
+        st.dataframe(df.head(10), use_container_width=True)
+    
+    with tab2:
+        st.subheader("Statistiques par catégorie")
+        
+        if "sous_categorie_de_produit" in df.columns:
+            subcat_counts = df["sous_categorie_de_produit"].value_counts().head(10)
+            st.write("**Top 10 des sous-catégories:**")
+            st.bar_chart(subcat_counts)
+        
+        if "risques_encourus" in df.columns:
+            risk_counts = df["risques_encourus"].value_counts().head(10)
+            st.write("**Top 10 des risques encourus:**")
+            st.bar_chart(risk_counts)
+    
+    with tab3:
+        st.subheader("Distribution temporelle")
+        
+        if "date_publication" in df.columns:
+            # Convertir en datetime si nécessaire
+            if not pd.api.types.is_datetime64_dtype(df["date_publication"]):
+                date_df = df.copy()
+                date_df["date_month"] = pd.to_datetime(df["date_publication"]).dt.to_period("M")
+            else:
+                date_df = df.copy()
+                date_df["date_month"] = df["date_publication"].dt.to_period("M")
+            
+            # Compter par mois
+            monthly_counts = date_df["date_month"].value_counts().sort_index()
+            monthly_counts.index = monthly_counts.index.astype(str)
+            
+            st.write("**Nombre de rappels par mois:**")
+            st.line_chart(monthly_counts)
+
+# Interface utilisateur
+st.title("Analyse des Rappels Produits Alimentation")
 
 # Activer le mode debug
 if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = True
 
 # Paramètres de chargement
-st.header("🔍 Paramètres de Chargement")
+st.header("🔍 Paramètres")
 
-# Date de début
-default_date = date(2022, 1, 1)
-start_date = st.date_input("Charger les rappels depuis:", value=default_date)
-st.session_state.load_start_date = start_date
+col1, col2 = st.columns(2)
+
+with col1:
+    # Date de début
+    default_date = date(2022, 1, 1)
+    start_date = st.date_input("Charger les rappels depuis:", value=default_date)
+    st.session_state.load_start_date = start_date
+
+with col2:
+    # Catégorie (pour l'instant fixée à Alimentation)
+    category = st.selectbox(
+        "Catégorie de produits:",
+        options=["Alimentation"],
+        index=0
+    )
 
 # Bouton pour charger les données
 if st.button("🔄 Charger les données", type="primary"):
-    df = load_rappelconso_data()
+    df = load_rappelconso_data(category_filter=category)
     
     if not df.empty:
-        st.header("📊 Aperçu des données")
-        st.write(f"Nombre total de rappels: {len(df)}")
-        st.dataframe(df.head(10))
-        
-        # Afficher quelques statistiques
-        if "categorie_de_produit" in df.columns:
-            st.header("📈 Statistiques rapides")
-            st.write("Top 5 des sous-catégories:")
-            if "sous_categorie_de_produit" in df.columns:
-                st.write(df["sous_categorie_de_produit"].value_counts().head(5))
+        show_basic_stats(df)
     else:
         st.error("Aucune donnée n'a pu être chargée. Consultez les messages d'erreur.")
 
-# Afficher la documentation de l'API
-with st.expander("Documentation API RappelConso", expanded=False):
-    st.markdown("""
-    ## Informations sur l'API RappelConso
-    
-    L'API RappelConso est disponible via data.economie.gouv.fr et permet d'accéder aux données des rappels de produits.
-    
-    ### Points d'accès
-    
-    - **API Explorer**: [https://data.economie.gouv.fr/explore/dataset/rappelconso-v2-gtin-espaces/api/](https://data.economie.gouv.fr/explore/dataset/rappelconso-v2-gtin-espaces/api/)
-    - **API Records**: [https://data.economie.gouv.fr/api/v2/catalog/datasets/rappelconso-v2-gtin-espaces/records](https://data.economie.gouv.fr/api/v2/catalog/datasets/rappelconso-v2-gtin-espaces/records)
-    
-    ### Filtrage des données
-    
-    L'API permet plusieurs méthodes de filtrage:
-    
-    1. **Paramètre `q`**: Recherche textuelle générale
-    2. **Paramètre `where`**: Filtre avec expressions SQL
-    3. **Paramètre `refine`**: Filtrage par valeur exacte
-    
-    ### Exemples
-    
-    ```
-    # Recherche simple
-    ?q=Alimentation
-    
-    # Filtre avec where
-    ?where=categorie_produit="Alimentation"
-    
-    # Filtre avec refine
-    ?refine.categorie_produit=Alimentation
-    ```
-    """)
+# Afficher les données déjà chargées si elles existent
+elif "rappels_df" in st.session_state:
+    df = st.session_state.rappels_df
+    st.info(f"Utilisation des données déjà chargées ({len(df)} rappels)")
+    show_basic_stats(df)
 
-# Afficher les options de débogage
-if st.session_state.debug_mode:
-    with st.expander("Options de débogage avancées", expanded=False):
-        if st.button("🧪 Test simple connexion API"):
-            test_api_connection()
+# Boutons d'action supplémentaires
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("❌ Effacer les données"):
+        if "rappels_df" in st.session_state:
+            del st.session_state.rappels_df
+        st.cache_data.clear()
+        st.success("Données effacées et cache vidé!")
+        st.rerun()
+
+with col2:
+    if "rappels_df" in st.session_state and not st.session_state.rappels_df.empty:
+        # Convertir en Excel pour téléchargement
+        import io
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+            st.session_state.rappels_df.to_excel(writer, sheet_name="Rappels", index=False)
+        buffer.seek(0)
         
-        if st.button("❌ Effacer le cache"):
-            st.cache_data.clear()
-            st.success("Cache effacé!")
+        st.download_button(
+            label="💾 Télécharger les données (Excel)",
+            data=buffer,
+            file_name=f"rappels_alimentation_{date.today().strftime('%Y-%m-%d')}.xlsx",
+            mime="application/vnd.ms-excel"
+        )
