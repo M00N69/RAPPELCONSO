@@ -157,13 +157,9 @@ def debug_log(message, data=None):
 
 
 # --- Liste prédéfinie de catégories ---
-# L'API RappelConso liste de nombreuses catégories, mais 'alimentation' est la plus courante.
-# Pour l'instant, on garde une liste limitée et on force potentiellement 'alimentation' au chargement.
-# Si l'utilisateur veut *vraiment* que SEULEMENT l'alimentation soit chargée, on peut rendre la selectbox non éditable
-# et la fixer à "alimentation". Sinon, on garde la flexibilité mais on s'assure que le filtre API est appliqué.
-# Gardons la selectbox mais par défaut "alimentation". L'API filtre au chargement.
-CATEGORIES = ["alimentation", "vêtements et accessoires", "maison-habitat", "jouets", "hygiène-beauté", "véhicules", "autres"]
-# Note: Retirer l'option "" pour charger toutes les catégories si on veut strictement limiter au chargement.
+# Fixée à "alimentation" pour répondre à la demande.
+CATEGORIES = ["alimentation"]
+
 
 # --- Fonction de chargement des données avec cache ---
 @st.cache_data(ttl=3600, show_spinner=False) # Cache pendant 1 heure, cache key dépend des paramètres
@@ -171,15 +167,12 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
     """
     Charge les données de l'API RappelConso.
     Applique le filtre de date et de catégorie à l'API.
-    Force la catégorie à 'alimentation' si une autre est sélectionnée (pour répondre à la demande).
+    Force la catégorie à 'alimentation'.
     """
     api_url = "https://data.economie.gouv.fr/api/v2/catalog/datasets/rappelconso-v2-gtin-espaces/records"
     
-    # On force la catégorie à 'alimentation' ici pour répondre à la demande spécifique,
-    # même si l'utilisateur sélectionne autre chose dans le selectbox.
-    # Si la selectbox doit *contrôler* la catégorie chargée, commenter la ligne suivante.
-    # Pour l'instant, le selectbox sert juste d'indicateur/default au chargement.
-    actual_category_to_load = "alimentation" # <--- HARDCODED FOR "ALIMENTATION ONLY" REQUEST
+    # On force la catégorie à 'alimentation' ici pour répondre à la demande spécifique.
+    actual_category_to_load = "alimentation" 
 
     params = {
         "limit": 100, # Limite par page, max 100 dans l'API
@@ -189,10 +182,7 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
     # Ajouter un filtre de catégorie
     if actual_category_to_load:
         params["refine.categorie_produit"] = actual_category_to_load
-    else:
-        # Si on voulait permettre 'Toutes', il faudrait gérer l'absence du paramètre refine.
-        # Mais avec la demande de "alimentation seulement", ce cas est évité.
-        pass # Le filtre de catégorie est toujours présent ici
+    # Note: Pas de 'else' pour charger toutes les catégories car la catégorie est forcée.
 
     # Ajouter un filtre de date de publication si spécifié
     if start_date:
@@ -436,6 +426,7 @@ def display_pagination_controls(current_page_state_key, total_items, items_per_p
 
     with col_prev:
         if st.session_state[current_page_state_key] > 1:
+            # Ajout d'une clé dynamique pour éviter les conflits si plusieurs paginations sur la même page (non le cas ici, mais bonne pratique)
             if st.button("← Précédent", key=f"btn_prev_{current_page_state_key}"):
                 st.session_state[current_page_state_key] -= 1
                 st.rerun()
@@ -445,6 +436,7 @@ def display_pagination_controls(current_page_state_key, total_items, items_per_p
 
     with col_next:
         if st.session_state[current_page_state_key] < total_pages:
+             # Ajout d'une clé dynamique
             if st.button("Suivant →", key=f"btn_next_{current_page_state_key}"):
                 st.session_state[current_page_state_key] += 1
                 st.rerun()
@@ -469,9 +461,9 @@ def main():
     if "quick_search_input" not in st.session_state:
          st.session_state.quick_search_input = ""
     if "items_per_page_main" not in st.session_state:
-        st.session_state.items_per_page_main = 10
+        st.session_state.items_per_page_main = 10 # Default 10 items total per page (5 pairs)
     if "items_per_page_search" not in st.session_state:
-        st.session_state.items_per_page_search = 10
+        st.session_state.items_per_page_search = 10 # Default 10 items total per page (5 pairs)
 
 
     # En-tête
@@ -514,7 +506,7 @@ def main():
     # Charger les données si le bouton est cliqué OU si c'est la première exécution ET qu'aucun paramètre n'est enregistré
     if load_button or (st.session_state.rappel_data is None and st.session_state.load_params is None):
         # Afficher un message pendant le chargement
-        st.sidebar.info("Chargement des données en cours...")
+        status_message = st.sidebar.info("Chargement des données en cours...")
         st.session_state.rappel_data = load_rappel_data(
             start_date=start_date,
             category=selected_category_loading, # Utilise la catégorie sélectionnée/fixée
@@ -528,14 +520,15 @@ def main():
         st.session_state.selected_risks = ["Tous"]
         st.session_state.current_page = 1 # Reset main list pagination
         st.session_state.search_current_page = 1 # Reset search results pagination
-        st.session_state.quick_search_input = "" # Clear search input
+        # Ne pas réinitialiser l'input de recherche, l'utilisateur pourrait vouloir relancer la même recherche
+        # st.session_state.quick_search_input = "" # Clear search input
 
-        st.sidebar.empty() # Clear the loading message (if it was there)
+        status_message.empty() # Clear the loading message (if it was there)
         # Use st.toast or st.success for feedback after loading
         if st.session_state.rappel_data is not None and not st.session_state.rappel_data.empty:
             st.toast("Données chargées avec succès !", icon="✅")
         else:
-             st.toast("Aucune donnée chargée.", icon="⚠️")
+             st.toast("Aucune donnée chargée avec les paramètres spécifiés.", icon="⚠️")
 
         st.rerun() # Rerun pour appliquer le chargement et afficher les données
 
@@ -596,6 +589,25 @@ def main():
 
     if "Tous" not in selected_risks:
          df_filtered = df_filtered[df_filtered["risques"].isin(selected_risks)]
+
+    # Vérifier si le DataFrame filtré est vide (important pour la suite)
+    if df_filtered.empty:
+        st.warning("Aucun rappel ne correspond aux filtres d'analyse sélectionnés.")
+        # Afficher les métriques basées sur le df *chargé* quand même pour information
+        col1, col2, col3, col4 = st.columns(4)
+        with col1: st.markdown(f"""<div class="metric"><div class="metric-value">{len(df)}</div><div>Rappels chargés</div></div>""", unsafe_allow_html=True)
+        with col2: st.markdown(f"""<div class="metric"><div class="metric-value">0</div><div>Rappels affichés</div></div>""", unsafe_allow_html=True)
+        with col3: st.markdown(f"""<div class="metric"><div class="metric-value">0</div><div>Rappels (30 derniers jours)</div></div>""", unsafe_allow_html=True)
+        with col4: st.markdown(f"""<div class="metric"><div class="metric-value">0</div><div>Marques uniques</div></div>""", unsafe_allow_html=True)
+        
+        # Afficher les onglets mais avec des messages d'absence de données à l'intérieur
+        tab1, tab2, tab3 = st.tabs(["📋 Liste des rappels", "📊 Visualisations", "🔍 Recherche rapide"])
+        with tab1: st.info("Aucun rappel ne correspond aux filtres d'analyse sélectionnés.")
+        with tab2: st.info("Aucune donnée à visualiser avec les filtres d'analyse sélectionnés.")
+        with tab3: st.info("Aucune donnée à rechercher avec les filtres d'analyse sélectionnés.")
+        
+        return # Arrêter l'exécution de main() ici si df_filtered est vide
+
 
     # --- Afficher quelques métriques ---
     st.subheader("Vue d'ensemble")
@@ -685,17 +697,21 @@ def main():
 
         if total_items_main > 0:
             # Afficher en 2 colonnes
-            for i in range(start_idx_main, end_idx_main, 2):
+            # On itère sur les indices de start_idx à end_idx
+            indices_to_display = range(start_idx_main, end_idx_main)
+            for i in range(0, len(indices_to_display), 2):
                 col1, col2 = st.columns(2)
                 
                 # Afficher le premier produit de la paire
+                item_index_1 = indices_to_display[i]
                 with col1:
-                    display_recall_card(df_filtered.iloc[i])
+                    display_recall_card(df_filtered.iloc[item_index_1])
                 
                 # Afficher le deuxième produit si il existe
-                if i + 1 < end_idx_main: # Vérifier si le deuxième produit est dans la tranche actuelle
+                if i + 1 < len(indices_to_display): # Vérifier si le deuxième produit est dans la tranche actuelle d'indices
+                    item_index_2 = indices_to_display[i+1]
                     with col2:
-                         display_recall_card(df_filtered.iloc[i+1])
+                         display_recall_card(df_filtered.iloc[item_index_2])
                 # else:
                 #    with col2:
                 #         st.empty() # Streamlit gère les colonnes vides automatiquement
@@ -843,6 +859,7 @@ def main():
         if search_term:
             search_term_lower = search_term.lower()
             
+            # Colonnes sur lesquelles effectuer la recherche rapide
             search_cols = ["nom", "marque", "motif", "risques", "sous_categorie", "distributeurs", "zone_vente"]
             search_cols_existing = [col for col in search_cols if col in df_filtered.columns]
             
@@ -850,6 +867,7 @@ def main():
                  # Créer une colonne texte combinée pour la recherche
                  # Utiliser .copy() pour éviter SettingWithCopyWarning lors de l'ajout de la colonne 'search_text'
                  df_filtered_with_search = df_filtered.copy()
+                 # Concaténer seulement les colonnes existantes et gérées
                  df_filtered_with_search['search_text'] = df_filtered_with_search[search_cols_existing].astype(str).fillna('').agg(' '.join, axis=1).str.lower()
 
                  # Appliquer le filtre de recherche
@@ -886,17 +904,20 @@ def main():
             end_idx_search = min(start_idx_search + items_per_page_search, total_items_search)
 
             # Afficher en 2 colonnes
-            for i in range(start_idx_search, end_idx_search, 2):
+            indices_to_display_search = range(start_idx_search, end_idx_search)
+            for i in range(0, len(indices_to_display_search), 2):
                 col1, col2 = st.columns(2)
                 
                 # Afficher le premier produit de la paire
+                item_index_1 = indices_to_display_search[i]
                 with col1:
-                    display_recall_card(search_results_df.iloc[i])
+                    display_recall_card(search_results_df.iloc[item_index_1])
                 
                 # Afficher le deuxième produit si il existe
-                if i + 1 < end_idx_search: # Vérifier si le deuxième produit est dans la tranche actuelle
+                if i + 1 < len(indices_to_display_search): # Vérifier si le deuxième produit est dans la tranche actuelle d'indices
+                    item_index_2 = indices_to_display_search[i+1]
                     with col2:
-                         display_recall_card(search_results_df.iloc[i+1])
+                         display_recall_card(search_results_df.iloc[item_index_2])
                 # else:
                 #     with col2:
                 #          st.empty() # Streamlit gère les colonnes vides automatiquement
@@ -915,7 +936,7 @@ def main():
     <div class="footer">
         RappelConso Insight - Application basée sur les données de <a href="https://www.rappelconso.gouv.fr/" target="_blank">RappelConso.gouv.fr</a>. Données fournies par data.economie.gouv.fr
     </div>
-    """, unsafe_allow_html=True) # Corrected this line
+    """, unsafe_allow_html=True) # Corrected the syntax error here
 
 
 # Exécuter l'application
