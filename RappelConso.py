@@ -3,322 +3,486 @@ import pandas as pd
 import requests
 from datetime import datetime, date, timedelta
 import time
-import urllib.parse
+import plotly.express as px
 
-# Configuration
-st.set_page_config(page_title="RappelConso API Explorer", layout="wide")
+# Configuration de la page
+st.set_page_config(
+    page_title="RappelConso Insight",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Fonction de débogage
-def debug_log(message, data=None):
-    if st.session_state.get("debug_mode", False):
-        st.sidebar.markdown(f"**DEBUG:** {message}")
-        if data is not None:
-            st.sidebar.write(data)
+# CSS simplifié pour le style de base
+st.markdown("""
+<style>
+    .header {
+        background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%);
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+        text-align: center;
+        color: white;
+    }
+    .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 0.5rem;
+    }
+    .card {
+        background-color: white;
+        border-radius: 8px;
+        padding: 1.2rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .metric {
+        text-align: center;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border-top: 3px solid #2980b9;
+    }
+    .metric-value {
+        font-size: 2.2em;
+        font-weight: bold;
+        color: #2980b9;
+    }
+    .recall-card {
+        border-left: 4px solid #2980b9;
+        padding-left: 0.8rem;
+    }
+    .risk-high {
+        color: #e74c3c;
+        font-weight: bold;
+    }
+    .risk-medium {
+        color: #f39c12;
+        font-weight: bold;
+    }
+    .risk-low {
+        color: #27ae60;
+        font-weight: bold;
+    }
+    .footer {
+        margin-top: 2rem;
+        text-align: center;
+        color: #7f8c8d;
+        font-size: 0.8em;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Fonction pour explorer les valeurs de catégories disponibles
-def explore_categories():
-    """Explore les valeurs de catégories disponibles dans l'API"""
-    try:
-        api_url = "https://data.economie.gouv.fr/api/v2/catalog/datasets/rappelconso-v2-gtin-espaces/records"
-        
-        # Requête simple sans filtre
-        params = {
-            "limit": 1000,  # On prend un échantillon assez grand
-            "select": "categorie_produit"  # On ne récupère que la colonne catégorie
-        }
-        
-        with st.spinner("Exploration des catégories..."):
-            response = requests.get(api_url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-        
-        # Extraction des valeurs uniques de catégorie
-        categories = set()
-        records = data.get("records", [])
-        
-        for record in records:
-            if "record" in record and "fields" in record["record"]:
-                fields = record["record"]["fields"]
-                if "categorie_produit" in fields:
-                    categories.add(fields["categorie_produit"])
-        
-        return sorted(list(categories))
-    
-    except Exception as e:
-        st.error(f"Erreur lors de l'exploration des catégories: {str(e)}")
-        return []
-
-# Fonction pour tester différentes approches de filtrage
-def test_category_filters(category):
-    """Teste différentes méthodes de filtrage par catégorie"""
+# Fonction de chargement des données (méthode qui fonctionne)
+def load_rappel_data(start_date=None, category="alimentation", max_records=1000):
+    """
+    Charge les données de l'API RappelConso en utilisant la méthode refine
+    """
     api_url = "https://data.economie.gouv.fr/api/v2/catalog/datasets/rappelconso-v2-gtin-espaces/records"
     
-    # Liste des approches à tester
-    filter_approaches = [
-        # Approche 1: where avec guillemets doubles
-        {"where": f'categorie_produit="{category}"', "limit": 5},
-        
-        # Approche 2: where avec guillemets simples
-        {"where": f"categorie_produit='{category}'", "limit": 5},
-        
-        # Approche 3: q simple
-        {"q": category, "limit": 5},
-        
-        # Approche 4: refine
-        {"refine.categorie_produit": category, "limit": 5},
-        
-        # Approche 5: where avec like
-        {"where": f"categorie_produit like '%{category}%'", "limit": 5},
-        
-        # Approche 6: where sans guillemets
-        {"where": f"categorie_produit={category}", "limit": 5}
-    ]
+    # Paramètres de la requête
+    params = {
+        "refine.categorie_produit": category,  # Méthode qui fonctionne
+        "limit": 100,
+        "offset": 0
+    }
     
-    results = []
+    # Ajouter un filtre de date si spécifié
+    if start_date:
+        # Pour les dates, nous allons utiliser le filtre "q" qui est moins strict
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        params["q"] = start_date_str
     
-    for approach in filter_approaches:
-        try:
-            response = requests.get(api_url, params=approach, timeout=10)
-            
-            # Même si la requête échoue, on récupère les informations
-            status = "✅" if response.status_code == 200 else "❌"
-            count = response.json().get("total_count", 0) if response.status_code == 200 else 0
-            
-            results.append({
-                "approach": approach,
-                "status_code": response.status_code,
-                "status": status,
-                "count": count,
-                "url": response.url
-            })
-        
-        except Exception as e:
-            results.append({
-                "approach": approach,
-                "status_code": "ERROR",
-                "status": "❌",
-                "count": 0,
-                "url": str(e)
-            })
+    all_records = []
+    total_count = 0
     
-    return results
-
-# Fonction pour charger les données avec la méthode qui fonctionne
-def load_data_with_working_filter(category, filter_method, start_date):
-    """Charge les données en utilisant la méthode de filtrage qui fonctionne"""
-    api_url = "https://data.economie.gouv.fr/api/v2/catalog/datasets/rappelconso-v2-gtin-espaces/records"
-    
-    # Adapter les paramètres selon la méthode qui fonctionne
-    if filter_method == "where_double_quotes":
-        params = {"where": f'categorie_produit="{category}"', "limit": 100}
-    elif filter_method == "where_single_quotes":
-        params = {"where": f"categorie_produit='{category}'", "limit": 100}
-    elif filter_method == "q":
-        params = {"q": category, "limit": 100}
-    elif filter_method == "refine":
-        params = {"refine.categorie_produit": category, "limit": 100}
-    elif filter_method == "where_like":
-        params = {"where": f"categorie_produit like '%{category}%'", "limit": 100}
-    elif filter_method == "where_no_quotes":
-        params = {"where": f"categorie_produit={category}", "limit": 100}
-    else:
-        # Par défaut, utiliser refine qui est généralement fiable
-        params = {"refine.categorie_produit": category, "limit": 100}
-    
-    try:
-        # Requête initiale pour obtenir le nombre total
+    with st.spinner("Chargement des données RappelConso..."):
+        # Première requête pour obtenir le nombre total
         response = requests.get(api_url, params=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        
-        total_count = data.get("total_count", 0)
-        if total_count == 0:
-            st.warning(f"Aucun rappel trouvé pour la catégorie '{category}' avec la méthode {filter_method}.")
-            return pd.DataFrame()
-        
-        # Récupérer toutes les données par pages
-        all_records = []
-        offset = 0
-        page_size = 100
-        max_records = 5000
-        
-        with st.progress(0) as progress_bar:
+        if response.status_code == 200:
+            data = response.json()
+            total_count = data.get("total_count", 0)
+            
+            if total_count == 0:
+                st.warning(f"Aucun rappel trouvé pour la catégorie '{category}'.")
+                return pd.DataFrame()
+            
+            # Récupérer les données par lots
+            progress_bar = st.progress(0)
+            offset = 0
+            
             while offset < min(total_count, max_records):
                 params["offset"] = offset
-                params["limit"] = page_size
-                
                 response = requests.get(api_url, params=params, timeout=30)
-                response.raise_for_status()
                 
-                page_data = response.json()
-                page_records = page_data.get("records", [])
-                
-                if not page_records:
+                if response.status_code == 200:
+                    page_data = response.json()
+                    records = page_data.get("records", [])
+                    
+                    if not records:
+                        break
+                    
+                    # Extraction des champs
+                    for record in records:
+                        if "record" in record and "fields" in record["record"]:
+                            all_records.append(record["record"]["fields"])
+                    
+                    offset += len(records)
+                    progress_bar.progress(min(1.0, offset / min(total_count, max_records)))
+                    
+                    if len(all_records) >= max_records:
+                        st.info(f"Limite de {max_records} enregistrements atteinte (sur {total_count} disponibles).")
+                        break
+                    
+                    time.sleep(0.1)
+                else:
+                    st.error(f"Erreur API: {response.status_code}")
                     break
-                
-                # Extraction des champs
-                for record in page_records:
-                    if "record" in record and "fields" in record["record"]:
-                        all_records.append(record["record"]["fields"])
-                
-                offset += len(page_records)
-                progress_bar.progress(min(1.0, offset / min(total_count, max_records)))
-                
-                if len(all_records) >= max_records:
-                    break
-                
-                time.sleep(0.1)
-        
-        # Créer le dataframe
-        if not all_records:
-            st.warning(f"Aucune donnée extraite des réponses de l'API pour la catégorie '{category}'.")
-            return pd.DataFrame()
-        
-        df = pd.DataFrame(all_records)
-        
-        # Filtrer par date si nécessaire
-        if "date_publication" in df.columns and start_date:
-            # Convertir en datetime sans timezone
-            df["date_publication"] = pd.to_datetime(df["date_publication"], errors="coerce")
-            
-            # Filtrer
-            if not pd.isna(df["date_publication"]).all():
-                start_dt = pd.to_datetime(start_date)
-                df = df[df["date_publication"] >= start_dt]
-        
-        return df
-        
-    except Exception as e:
-        st.error(f"Erreur lors du chargement des données: {str(e)}")
-        import traceback
-        st.error(traceback.format_exc())
+    
+    if not all_records:
         return pd.DataFrame()
-
-# Interface utilisateur
-st.title("🔍 RappelConso API Explorer")
-st.write("Cet outil vous aide à explorer l'API RappelConso et trouver la méthode de filtrage qui fonctionne.")
-
-# Activer le mode debug
-if "debug_mode" not in st.session_state:
-    st.session_state.debug_mode = True
-
-# Section 1: Exploration des catégories disponibles
-st.header("1️⃣ Explorer les catégories disponibles")
-
-if st.button("🔎 Découvrir les catégories disponibles"):
-    with st.spinner("Récupération des catégories..."):
-        categories = explore_categories()
     
-    if categories:
-        st.success(f"✅ {len(categories)} catégories trouvées!")
-        st.write("**Catégories disponibles:**")
-        st.write(categories)
+    # Créer le DataFrame
+    df = pd.DataFrame(all_records)
+    
+    # Convertir la date de publication
+    if "date_publication" in df.columns:
+        df["date_publication"] = pd.to_datetime(df["date_publication"], errors="coerce")
+    
+    # Standardiser les noms de colonnes pour l'interface
+    column_mapping = {
+        "categorie_produit": "categorie",
+        "sous_categorie_produit": "sous_categorie",
+        "marque_produit": "marque",
+        "modeles_ou_references": "modele",
+        "motif_rappel": "motif",
+        "risques_encourus": "risques",
+        "distributeurs": "distributeurs",
+        "liens_vers_les_images": "image",
+        "lien_vers_la_fiche_rappel": "fiche_url",
+        "date_publication": "date",
+        "libelle": "nom",
+        "id": "id"
+    }
+    
+    # Renommer les colonnes existantes
+    for old, new in column_mapping.items():
+        if old in df.columns:
+            df[new] = df[old]
+    
+    # Trier par date (plus récent en premier)
+    if "date" in df.columns:
+        df = df.sort_values("date", ascending=False)
+    
+    return df
+
+# Fonction pour afficher une carte de rappel
+def display_recall_card(row):
+    """Affiche une carte de rappel"""
+    
+    # Extraire les données
+    nom = row.get("nom", row.get("modele", "Produit non spécifié"))
+    marque = row.get("marque", "Marque non spécifiée")
+    date_str = ""
+    
+    if "date" in row and pd.notna(row["date"]):
+        date_obj = row["date"]
+        if hasattr(date_obj, "strftime"):
+            date_str = date_obj.strftime("%d/%m/%Y")
+        else:
+            date_str = str(date_obj)
+    
+    motif = row.get("motif", "Non spécifié")
+    risques = row.get("risques", "Non spécifié")
+    
+    # Déterminer la classe de risque
+    risk_class = "risk-low"
+    if isinstance(risques, str):
+        risques_lower = risques.lower()
+        if any(kw in risques_lower for kw in ["listeria", "salmonelle", "e. coli", "toxique"]):
+            risk_class = "risk-high"
+        elif any(kw in risques_lower for kw in ["allergène", "microbiologique", "corps étranger"]):
+            risk_class = "risk-medium"
+    
+    # Image du produit
+    image_url = None
+    if "image" in row and pd.notna(row["image"]):
+        image_links = str(row["image"])
+        if "|" in image_links:
+            image_url = image_links.split("|")[0].strip()
+        else:
+            image_url = image_links
+    
+    # URL de la fiche
+    fiche_url = row.get("fiche_url", "#")
+    
+    # Afficher la carte
+    with st.container():
+        st.markdown(f"""
+        <div class="card recall-card">
+            <h4>{nom}</h4>
+            <p><strong>Marque:</strong> {marque}</p>
+            <p><strong>Date:</strong> {date_str}</p>
+            <p><strong>Motif:</strong> {motif}</p>
+            <p><strong>Risques:</strong> <span class="{risk_class}">{risques}</span></p>
+        """, unsafe_allow_html=True)
         
-        # Sauvegarder les catégories dans la session
-        st.session_state.available_categories = categories
-    else:
-        st.error("Aucune catégorie trouvée ou erreur lors de la récupération.")
+        # Afficher l'image si disponible
+        if image_url:
+            try:
+                st.image(image_url, width=200)
+            except:
+                st.info("Image non disponible")
+        
+        # Lien vers la fiche
+        if fiche_url and fiche_url != "#":
+            st.link_button("Voir la fiche complète", fiche_url, type="secondary")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
 
-# Section 2: Tester les méthodes de filtrage
-st.header("2️⃣ Tester les méthodes de filtrage")
-
-# Sélectionner une catégorie
-category_options = st.session_state.get("available_categories", ["alimentation", "Alimentation"])
-selected_category = st.selectbox("Choisir une catégorie à tester:", options=category_options)
-
-if st.button("🧪 Tester les méthodes de filtrage"):
-    with st.spinner("Test des différentes méthodes de filtrage..."):
-        test_results = test_category_filters(selected_category)
+# Fonction principale
+def main():
+    # En-tête
+    st.markdown("""
+    <div class="header">
+        <h1>RappelConso Insight</h1>
+        <p>Analyse des rappels de produits alimentaires en France</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    st.subheader("Résultats des tests")
+    # Sidebar pour les filtres
+    st.sidebar.title("Filtres")
     
-    # Trouver la meilleure méthode (celle qui renvoie des résultats)
-    working_methods = [r for r in test_results if r["count"] > 0]
+    # Date de début
+    start_date = st.sidebar.date_input(
+        "À partir de la date:",
+        value=date(2023, 1, 1),  # Par défaut, depuis le début de 2023
+        max_value=date.today()
+    )
     
-    if working_methods:
-        # Sauvegarder la méthode qui fonctionne
-        st.session_state.working_filter_method = working_methods[0]["approach"]
-        st.success(f"✅ {len(working_methods)} méthodes fonctionnent!")
-    else:
-        st.error("❌ Aucune méthode de filtrage n'a fonctionné!")
+    # Catégorie (fixe pour l'instant)
+    category = "alimentation"
     
-    # Afficher les résultats dans un tableau
-    for i, result in enumerate(test_results):
+    # Nombre max de rappels
+    max_records = st.sidebar.slider(
+        "Nombre max de rappels:", 
+        min_value=100,
+        max_value=5000,
+        value=1000,
+        step=100
+    )
+    
+    # Bouton pour charger les données
+    if st.sidebar.button("Charger les données", type="primary"):
+        # Charger les données
+        st.session_state.rappel_data = load_rappel_data(
+            start_date=start_date,
+            category=category,
+            max_records=max_records
+        )
+    
+    # Vérifier si les données sont chargées
+    if "rappel_data" not in st.session_state:
+        st.info("Veuillez charger les données en cliquant sur le bouton dans la barre latérale.")
+        return
+    
+    df = st.session_state.rappel_data
+    
+    if df.empty:
+        st.warning("Aucune donnée disponible avec les filtres actuels.")
+        return
+    
+    # Afficher quelques métriques
+    col1, col2, col3, col4 = st.columns(4)
+    
+    # Nombre total de rappels
+    with col1:
+        st.markdown(f"""
+        <div class="metric">
+            <div class="metric-value">{len(df)}</div>
+            <div>Total des rappels</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Rappels récents (30 derniers jours)
+    if "date" in df.columns:
+        recent_date = datetime.now() - timedelta(days=30)
+        recent_count = len(df[df["date"] >= recent_date])
+        
+        with col2:
+            st.markdown(f"""
+            <div class="metric">
+                <div class="metric-value">{recent_count}</div>
+                <div>Rappels récents (30j)</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Nombre de sous-catégories
+    if "sous_categorie" in df.columns:
+        subcat_count = df["sous_categorie"].nunique()
+        
+        with col3:
+            st.markdown(f"""
+            <div class="metric">
+                <div class="metric-value">{subcat_count}</div>
+                <div>Sous-catégories</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Nombre de marques
+    if "marque" in df.columns:
+        brand_count = df["marque"].nunique()
+        
+        with col4:
+            st.markdown(f"""
+            <div class="metric">
+                <div class="metric-value">{brand_count}</div>
+                <div>Marques uniques</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Afficher les onglets
+    tab1, tab2, tab3 = st.tabs(["📋 Liste des rappels", "📊 Visualisations", "🔍 Recherche avancée"])
+    
+    with tab1:
+        # Pagination des rappels
+        st.subheader("Liste des rappels")
+        
+        items_per_page = st.select_slider(
+            "Rappels par page:",
+            options=[5, 10, 20, 50],
+            value=10
+        )
+        
+        if "current_page" not in st.session_state:
+            st.session_state.current_page = 1
+        
+        total_pages = (len(df) - 1) // items_per_page + 1
+        
+        # Assurer que la page actuelle est valide
+        st.session_state.current_page = max(1, min(st.session_state.current_page, total_pages))
+        
+        # Afficher les rappels de la page actuelle
+        start_idx = (st.session_state.current_page - 1) * items_per_page
+        end_idx = min(start_idx + items_per_page, len(df))
+        
+        for i in range(start_idx, end_idx):
+            display_recall_card(df.iloc[i])
+        
+        # Pagination
         col1, col2, col3 = st.columns([1, 3, 1])
         
         with col1:
-            st.write(f"{result['status']} Méthode {i+1}")
+            if st.session_state.current_page > 1:
+                if st.button("← Précédent"):
+                    st.session_state.current_page -= 1
+                    st.experimental_rerun()
         
         with col2:
-            st.code(str(result["approach"]))
+            st.write(f"Page {st.session_state.current_page} sur {total_pages}")
         
         with col3:
-            st.write(f"Résultats: {result['count']}")
-        
-        # Afficher l'URL complète en petit
-        st.caption(f"URL: {result['url']}")
-        st.divider()
-
-# Section 3: Charger les données avec la méthode qui fonctionne
-st.header("3️⃣ Charger les données")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    load_category = st.selectbox(
-        "Catégorie à charger:",
-        options=category_options,
-        index=0
-    )
-
-with col2:
-    start_date = st.date_input("Charger depuis:", value=date(2022, 1, 1))
-
-# Liste des méthodes de filtrage
-filter_methods = [
-    "where_double_quotes",
-    "where_single_quotes",
-    "q",
-    "refine",
-    "where_like",
-    "where_no_quotes"
-]
-
-# Sélectionner la méthode
-selected_method = st.selectbox(
-    "Méthode de filtrage:",
-    options=filter_methods,
-    index=filter_methods.index("refine")  # refine est souvent fiable
-)
-
-if st.button("📥 Charger les données", type="primary"):
-    with st.spinner("Chargement des données en cours..."):
-        df = load_data_with_working_filter(load_category, selected_method, start_date)
+            if st.session_state.current_page < total_pages:
+                if st.button("Suivant →"):
+                    st.session_state.current_page += 1
+                    st.experimental_rerun()
     
-    if not df.empty:
-        st.success(f"✅ {len(df)} rappels chargés avec succès!")
+    with tab2:
+        # Visualisations simplifiées
+        st.subheader("Visualisations des données")
         
-        # Afficher les données
-        st.subheader("Aperçu des données")
-        st.dataframe(df.head(10))
+        # Évolution temporelle des rappels
+        if "date" in df.columns:
+            st.write("### Évolution des rappels dans le temps")
+            
+            # Aggréger par mois
+            df_time = df.copy()
+            df_time["month"] = df_time["date"].dt.to_period("M")
+            monthly_counts = df_time.groupby("month").size().reset_index(name="count")
+            monthly_counts["month_str"] = monthly_counts["month"].astype(str)
+            
+            fig_time = px.line(
+                monthly_counts, 
+                x="month_str", 
+                y="count", 
+                title="Nombre de rappels par mois",
+                labels={"month_str": "Mois", "count": "Nombre de rappels"},
+                markers=True
+            )
+            
+            st.plotly_chart(fig_time, use_container_width=True)
         
-        # Sauvegarder dans la session
-        st.session_state.loaded_data = df
+        # Distribution par sous-catégorie
+        if "sous_categorie" in df.columns:
+            st.write("### Répartition par sous-catégorie")
+            
+            top_subcats = df["sous_categorie"].value_counts().nlargest(10)
+            
+            fig_subcat = px.pie(
+                values=top_subcats.values,
+                names=top_subcats.index,
+                title="Top 10 des sous-catégories"
+            )
+            
+            st.plotly_chart(fig_subcat, use_container_width=True)
         
-        # Option de téléchargement
-        import io
-        buffer = io.BytesIO()
+        # Distribution par risque
+        if "risques" in df.columns:
+            st.write("### Répartition par type de risque")
+            
+            top_risks = df["risques"].value_counts().nlargest(10)
+            
+            fig_risks = px.bar(
+                x=top_risks.index,
+                y=top_risks.values,
+                title="Top 10 des risques",
+                labels={"x": "Type de risque", "y": "Nombre de rappels"}
+            )
+            
+            st.plotly_chart(fig_risks, use_container_width=True)
+    
+    with tab3:
+        # Recherche avancée
+        st.subheader("Recherche avancée")
         
-        with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-            df.to_excel(writer, sheet_name="Rappels", index=False)
+        search_term = st.text_input("Rechercher un terme:", placeholder="Ex: listeria, fromage, etc.")
         
-        buffer.seek(0)
-        
-        st.download_button(
-            label="💾 Télécharger les données (Excel)",
-            data=buffer,
-            file_name=f"rappelconso_{load_category}_{date.today().strftime('%Y-%m-%d')}.xlsx",
-            mime="application/vnd.ms-excel"
-        )
-    else:
-        st.error("Aucune donnée n'a pu être chargée.")
+        if search_term:
+            # Recherche dans plusieurs colonnes
+            search_term_lower = search_term.lower()
+            
+            search_cols = ["nom", "marque", "motif", "risques", "sous_categorie"]
+            search_cols = [col for col in search_cols if col in df.columns]
+            
+            search_results = []
+            
+            for _, row in df.iterrows():
+                match = False
+                for col in search_cols:
+                    if pd.notna(row[col]) and search_term_lower in str(row[col]).lower():
+                        match = True
+                        break
+                
+                if match:
+                    search_results.append(row)
+            
+            if search_results:
+                st.success(f"{len(search_results)} résultats trouvés pour '{search_term}'")
+                
+                for result in search_results[:10]:  # Limiter à 10 résultats affichés
+                    display_recall_card(result)
+                
+                if len(search_results) > 10:
+                    st.info(f"Affichage des 10 premiers résultats sur {len(search_results)}.")
+            else:
+                st.warning(f"Aucun résultat trouvé pour '{search_term}'")
+    
+    # Footer
+    st.markdown("""
+    <div class="footer">
+        RappelConso Insight - Application développée pour la visualisation et l'analyse des données de rappels alimentaires
+    </div>
+    """, unsafe_allow_html=True)
+
+# Exécuter l'application
+if __name__ == "__main__":
+    main()
