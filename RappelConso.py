@@ -371,6 +371,25 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
     else:
         st.warning("La colonne 'categorie' est absente des données. Le filtrage 'alimentation' ne peut pas être appliqué après chargement.")
 
+    # --- CORRECTION MAJEURE : Supprimer les doublons basés sur l'ID ---
+    # L'ID de la fiche ("id" ou "numero_fiche") devrait être unique.
+    # Si l'API retourne des doublons pour une raison quelconque, on les supprime ici.
+    # Utiliser l'ID comme critère de déduplication.
+    initial_rows = len(df)
+    if 'id' in df.columns:
+         df.drop_duplicates(subset=['id'], keep='first', inplace=True)
+         if len(df) < initial_rows:
+              st.sidebar.warning(f"Supprimé {initial_rows - len(df)} doublons basés sur l'ID.")
+    else:
+         st.warning("La colonne 'id' est absente des données. Impossible de supprimer les doublons basés sur l'ID.")
+         # Si 'id' est absent, tenter une déduplication sur un sous-ensemble de colonnes clés
+         key_cols_for_dedup = ['nom', 'marque', 'date_str', 'motif', 'risques']
+         key_cols_existing = [col for col in key_cols_for_dedup if col in df.columns]
+         if len(key_cols_existing) > 0:
+              df.drop_duplicates(subset=key_cols_existing, keep='first', inplace=True)
+              if len(df) < initial_rows:
+                   st.sidebar.warning(f"Supprimé {initial_rows - len(df)} doublons basés sur un ensemble de colonnes clés.")
+
 
     # Débogage final
     debug_log("DataFrame traité et prêt", df.head())
@@ -399,6 +418,7 @@ def display_recall_card(row):
     """Affiche une carte de rappel dans le contexte d'une colonne."""
     
     # Extraire les données
+    # Utiliser .get pour éviter les KeyError si une colonne est manquante après chargement/filtrage
     nom = row.get("nom", row.get("modele", "Produit non spécifié"))
     marque = row.get("marque", "Marque non spécifiée")
     date_str = row.get("date_str", "Date non spécifiée")
@@ -422,7 +442,6 @@ def display_recall_card(row):
         
         st.markdown(f"<h4>{nom}</h4>", unsafe_allow_html=True)
         st.markdown(f"<p><strong>Marque:</strong> {marque}</p>", unsafe_allow_html=True)
-        # CORRECTION : Utilisation correcte des f-strings
         st.markdown(f"<p><strong>Date de publication:</strong> {date_str}</p>", unsafe_allow_html=True) 
         st.markdown(f"<p><strong>Catégorie:</strong> {categorie} > {sous_categorie}</p>", unsafe_allow_html=True) 
         st.markdown(f"<p><strong>Risques:</strong> <span class='{risk_class}'>{risques}</span></p>", unsafe_allow_html=True)
@@ -430,8 +449,7 @@ def display_recall_card(row):
         # Afficher l'image si disponible, centrée dans la colonne
         if image_url:
             try:
-                # Utiliser st.image directement, les ajustements CSS devraient aider au centrage/taille
-                 st.image(image_url, width=100)
+                st.image(image_url, width=100)
             except Exception as e:
                 debug_log(f"Error loading image {image_url}", e)
                 st.info("Image non disponible")
@@ -456,14 +474,13 @@ def display_pagination_controls(current_page_state_key, total_items, items_per_p
     total_pages = math.ceil(total_items / items_per_page) if total_items > 0 else 1
 
     # S'assurer que la page actuelle ne dépasse pas le total de pages (peut arriver après filtrage ou recherche)
-    # Utilise .get pour éviter une erreur si l'état n'est pas encore initialisé (même si main essaie de tout initialiser)
     current_page = st.session_state.get(current_page_state_key, 1)
     if current_page > total_pages:
          st.session_state[current_page_state_key] = total_pages
     if current_page < 1:
          st.session_state[current_page_state_key] = 1
 
-    # Récupérer la valeur corrigée
+    # Récupérer la valeur corrigée pour l'affichage et les boutons
     current_page = st.session_state.get(current_page_state_key, 1)
 
 
@@ -471,7 +488,7 @@ def display_pagination_controls(current_page_state_key, total_items, items_per_p
 
     with col_prev:
         if current_page > 1:
-            # Ajout d'une clé dynamique pour éviter les conflits si plusieurs paginations sur la même page (non le cas ici, mais bonne pratique)
+            # Clé dynamique basée sur le nom de l'état de page pour éviter les conflits
             if st.button("← Précédent", key=f"btn_prev_{current_page_state_key}"):
                 st.session_state[current_page_state_key] = current_page - 1
                 st.rerun()
@@ -481,7 +498,7 @@ def display_pagination_controls(current_page_state_key, total_items, items_per_p
 
     with col_next:
         if current_page < total_pages:
-             # Ajout d'une clé dynamique
+            # Clé dynamique basée sur le nom de l'état de page
             if st.button("Suivant →", key=f"btn_next_{current_page_state_key}"):
                 st.session_state[current_page_state_key] = current_page + 1
                 st.rerun()
@@ -577,23 +594,16 @@ def prepare_data_context(df_filtered):
     relevant_cols_existing = [col for col in relevant_cols if col in df_filtered.columns]
 
     # Limiter à un nombre raisonnable de rappels pour ne pas dépasser la limite de tokens
-    # 50 rappels comme échantillon est un bon point de départ, ajustez si nécessaire
     sample_size = min(len(df_filtered), 50) 
-    # Utiliser sample(sample_size) pour un échantillon aléatoire ou head(sample_size) pour les plus récents
-    # head(sample_size) peut être plus pertinent car les données sont triées par date
+    # Utiliser head(sample_size) pour les plus récents
     df_sample = df_filtered[relevant_cols_existing].head(sample_size) 
 
     context_sample = ""
     if not df_sample.empty:
         context_sample = "\n\nÉchantillon de rappels (format JSON, limité aux colonnes pertinentes et premières lignes) :\n"
         # Convertir l'échantillon en string JSON. Utiliser default=str pour gérer les types non sérialisables si nécessaire.
-        try:
-            context_sample += df_sample.to_json(orient='records', indent=2, default=str) 
-        except Exception as e:
-             debug_log("Error converting sample to JSON", e)
-             context_sample += f"\nErreur lors de la conversion de l'échantillon en JSON: {e}\n"
-             context_sample = "" # Vide l'échantillon si la conversion échoue
-
+        # Ignorer les erreurs si la conversion JSON échoue pour certaines valeurs
+        context_sample += df_sample.to_json(orient='records', indent=2, default=str, force_ascii=False) # force_ascii=False pour garder les accents
 
     full_context = context_summary + context_sample
 
@@ -611,13 +621,15 @@ def main():
     if "selected_brands" not in st.session_state: st.session_state.selected_brands = ["Toutes"]
     if "selected_risks" not in st.session_state: st.session_state.selected_risks = ["Tous"]
     if "quick_search_input" not in st.session_state: st.session_state.quick_search_input = ""
-    if "last_search_term" not in st.session_state: st.session_state.last_search_term = ""
+    # Correction ici : utiliser une clé différente pour l'état de la valeur du widget
+    if "last_search_term_widget_value" not in st.session_state:
+         st.session_state.last_search_term_widget_value = ""
     if "items_per_page_main" not in st.session_state: st.session_state.items_per_page_main = 10
     if "items_per_page_search" not in st.session_state: st.session_state.items_per_page_search = 10
     if "groq_api_key" not in st.session_state: st.session_state.groq_api_key = ""
-    # S'assurer que le modèle par défaut existe dans la liste des modèles disponibles
+    # Correction ici : s'assurer que l'état groq_model est un modèle valide dès l'initialisation
     if "groq_model" not in st.session_state or st.session_state.groq_model not in GROQ_MODELS:
-        st.session_state.groq_model = GROQ_MODELS[0] if GROQ_MODELS else None
+        st.session_state.groq_model = GROQ_MODELS[0] if GROQ_MODELS else None # Utiliser le premier modèle comme défaut si la liste n'est pas vide
     if "ai_question" not in st.session_state: st.session_state.ai_question = ""
     if "ai_response" not in st.session_state: st.session_state.ai_response = ""
     if "last_ai_question" not in st.session_state: st.session_state.last_ai_question = ""
@@ -678,7 +690,7 @@ def main():
         st.session_state.selected_risks = ["Tous"]
         st.session_state.current_page = 1 # Reset main list pagination
         st.session_state.search_current_page = 1 # Reset search results pagination
-        st.session_state.last_search_term = "" # Reset search term state
+        st.session_state.last_search_term_widget_value = "" # Reset search term state for pagination check
         st.session_state.quick_search_input = "" # Clear search input widget via session state
         # Réinitialiser la réponse IA et la question
         st.session_state.ai_response = ""
@@ -744,10 +756,11 @@ def main():
     df_filtered = df.copy()
 
     if "Toutes" not in selected_subcategories:
+        # Utiliser isin et une liste pour gérer les NaN correctement si besoin, mais dropna() sur les options devrait suffire
         df_filtered = df_filtered[df_filtered["sous_categorie"].isin(selected_subcategories)]
 
     if "Toutes" not in selected_brands:
-        df_filtered = df_filtered[df_filtered["marque"].isin(selected_brands)]
+         df_filtered = df_filtered[df_filtered["marque"].isin(selected_brands)]
 
     if "Tous" not in selected_risks:
          df_filtered = df_filtered[df_filtered["risques"].isin(selected_risks)]
@@ -883,7 +896,6 @@ def main():
     st.session_state.ai_question = ai_question # Sauvegarder dans l'état de session
 
     # Bouton pour déclencher l'analyse
-    # Utilisez une clé spécifique pour ce bouton
     analyze_button = st.sidebar.button("Analyser avec l'IA", type="secondary", key="analyze_ai_button")
 
     # --- Logic to trigger AI analysis ---
@@ -937,25 +949,22 @@ def main():
 
         total_items_main = len(df_filtered)
         
+        # Afficher les rappels de la page actuelle en 2 colonnes
         start_idx_main = (st.session_state.current_page - 1) * items_per_page_main
         end_idx_main = min(start_idx_main + items_per_page_main, total_items_main)
 
         if total_items_main > 0:
             # CORRECTION: Obtenir la sous-section du DataFrame pour la page actuelle
-            # Utiliser .copy() est important si des modifications sont faites ensuite,
-            # mais ici on ne fait que lire, donc .iloc est suffisant.
-            page_df_main = df_filtered.iloc[start_idx_main:end_idx_main]
-            
+            page_df_main = df_filtered.iloc[start_idx_main:end_idx_main].reset_index(drop=True) # Reset index for iloc usage
+
             # Itérer sur les indices locaux de cette sous-section (0, 1, 2...) par pas de 2
-            # len(page_df_main) donne le nombre d'éléments sur la page actuelle
             for i in range(0, len(page_df_main), 2):
                 col1, col2 = st.columns(2)
                 
                 # Afficher le premier produit de la paire en utilisant l'index local 'i' de page_df_main
                 with col1:
-                    # Assurez-vous que l'index 'i' est valide pour page_df_main
-                    if i < len(page_df_main):
-                        display_recall_card(page_df_main.iloc[i])
+                    # Grâce à reset_index(), l'index 'i' est valide si i < len(page_df_main)
+                    display_recall_card(page_df_main.iloc[i])
                 
                 # Afficher le deuxième produit si il existe dans la sous-section
                 if i + 1 < len(page_df_main):
@@ -1031,7 +1040,6 @@ def main():
     with tab3:
         st.subheader("Recherche rapide dans les rappels affichés (champ: Motif)")
         
-        # Utiliser session state pour maintenir la valeur de l'input de recherche
         # L'input de texte lui-même met à jour st.session_state.quick_search_input
         search_term = st.text_input(
             "Entrez un terme pour rechercher dans le Motif du rappel:",
@@ -1039,8 +1047,7 @@ def main():
             value=st.session_state.quick_search_input, # Utilisez la valeur de l'état pour initialiser le widget
             key="quick_search_input" # Cette clé gère l'état automatiquement
         )
-        # CORRECTION: Ligne redondante supprimée qui causait l'erreur StreamlitAPIException
-        # st.session_state.quick_search_input = search_term # Sauvegarder la valeur - NE FAITES PAS CECI
+        # CORRECTION: Ligne redondante supprimée
 
         search_results_df = pd.DataFrame()
         # Appliquer la recherche si search_term n'est PAS vide (pour éviter de tout afficher par défaut)
@@ -1053,7 +1060,13 @@ def main():
                  df_filtered_with_search = df_filtered.copy()
                  # CORRECTION: S'assurer que 'motif' est bien traité comme string avant de mettre en minuscule
                  # On accède directement à la colonne 'motif' car search_cols_existing ne contient que 'motif'
-                 df_filtered_with_search['search_text'] = df_filtered_with_search['motif'].astype(str).str.lower()
+                 # S'assurer que la colonne 'motif' existe avant d'essayer d'y accéder
+                 if 'motif' in df_filtered_with_search.columns:
+                      df_filtered_with_search['search_text'] = df_filtered_with_search['motif'].astype(str).str.lower()
+                 else:
+                      # Si 'motif' n'existe pas (très improbable si load_rappel_data fonctionne), la recherche ne trouvera rien
+                      df_filtered_with_search['search_text'] = "" 
+
 
                  search_results_df = df_filtered_with_search[df_filtered_with_search['search_text'].str.contains(search_term_lower, na=False)].copy()
 
@@ -1084,9 +1097,9 @@ def main():
             end_idx_search = min(start_idx_search + items_per_page_search, total_items_search)
 
             # CORRECTION: Obtenir la sous-section du DataFrame pour la page actuelle de recherche
-            page_df_search = search_results_df.iloc[start_idx_search:end_idx_search]
+            page_df_search = search_results_df.iloc[start_idx_search:end_idx_search].reset_index(drop=True) # Reset index for iloc usage
 
-            # Afficher en 2 colonnes en itérant sur les indices de cette sous-section
+            # Afficher en 2 colonnes en itérant sur les indices locaux de cette sous-section
             for i in range(0, len(page_df_search), 2):
                 col1, col2 = st.columns(2)
                 # Afficher les produits en utilisant l'index local 'i' de page_df_search
@@ -1149,6 +1162,5 @@ if __name__ == "__main__":
     if "ai_question" not in st.session_state: st.session_state.ai_question = ""
     if "ai_response" not in st.session_state: st.session_state.ai_response = ""
     if "last_ai_question" not in st.session_state: st.session_state.last_ai_question = ""
-
 
     main()
