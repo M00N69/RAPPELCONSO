@@ -449,8 +449,8 @@ def display_recall_card(row):
         
         st.markdown(f"<h4>{nom}</h4>", unsafe_allow_html=True)
         st.markdown(f"<p><strong>Marque:</strong> {marque}</p>", unsafe_allow_html=True)
-        st.markdown(f"<p><strong>Date de publication:</strong> {date_str}</p>", unsafe_allow_html=True) 
-        # CORRECTION : Syntaxe correcte des f-strings, corrigée à nouveau ici
+        st.markdown(f("<p><strong>Date de publication:</strong> {}</p>").format(date_str), unsafe_allow_html=True) 
+        # CORRECTION : Syntaxe correcte des f-strings, corrigée ici
         st.markdown(f"<p><strong>Catégorie:</strong> {categorie} > {sous_categorie}</p>", unsafe_allow_html=True) 
         st.markdown(f"<p><strong>Risques:</strong> <span class='{risk_class}'>{risques}</span></p>", unsafe_allow_html=True)
         
@@ -531,14 +531,14 @@ def get_groq_response(api_key, model, prompt):
     Consignes importantes :
     1.  **Basez-vous UNIQUEMENT** sur les données fournies dans le contexte (Résumé des données et Échantillon de rappels JSON). N'utilisez pas de connaissances externes.
     2.  Le **Résumé des données** vous donne des statistiques générales (top motifs, top risques, etc.). C'est utile pour les tendances générales.
-    3.  L'**Échantillon de rappels (JSON)** liste les détails *spécifiques* de chaque rappel de l'échantillon. Ce sont les données *brutes* que vous devez parcourir et analyser pour trouver des informations précises sur des cas particuliers ou des liens entre champs (comme produits et risques).
-    4.  **POUR LES QUESTIONS SPECIFIQUES** (ex: quels produits sont associés à un risque particulier comme "bris de verre", quels distributeurs sont listés pour un motif donné, ou pour obtenir des détails sur des rappels précis), **vous DEVEZ IMPÉRATIVEMENT ANALYSER attentivement l'Échantillon de rappels (JSON)**. Parcourez les éléments de cet échantillon (chaque objet JSON dans la liste) et examinez attentivement les champs comme 'nom', 'marque', 'motif', 'risques', 'sous_categorie', etc. Recherchez les termes clés de la question (ex: "verre", "métal", "listeria") dans ces champs.
-    5.  Si vous trouvez des correspondances dans l'échantillon JSON, **liste les produits spécifiques trouvés dans l'échantillon** qui correspondent à la demande. Indiquez leur nom, motif et risque pour chaque produit trouvé. Si plusieurs produits sont trouvés, listez-les clairement.
+    3.  L'**Échantillon de rappels (JSON)** liste les détails *spécifiques* (nom, marque, sous-catégorie, motif) de chaque rappel de l'échantillon. Ce sont les données *brutes* que vous devez parcourir et analyser pour trouver des informations précises sur des cas particuliers ou des liens entre champs.
+    4.  **POUR LES QUESTIONS SPECIFIQUES** (ex: quels produits sont associés à un risque particulier comme "bris de verre", quels distributeurs sont listés pour un motif donné, ou pour obtenir des détails sur des rappels précis), **vous DEVEZ IMPÉRATIVEMENT ANALYSER attentivement l'Échantillon de rappels (JSON)**. Parcourez les éléments de cet échantillon (chaque objet JSON dans la liste) et examinez attentivement les champs comme 'nom', 'marque', 'motif', 'sous_categorie', etc. Recherchez les termes clés de la question (ex: "verre", "métal", "listeria") dans ces champs.
+    5.  Si vous trouvez des correspondances dans l'échantillon JSON, **liste les produits spécifiques trouvés dans l'échantillon** qui correspondent à la demande. Indiquez leur nom, marque, sous-catégorie et motif pour chaque produit trouvé. Si plusieurs produits sont trouvés, listez-les clairement.
     6.  Si une question ne peut pas être répondue avec les données fournies (parce que l'information n'apparaît pas du tout dans le résumé ET n'apparaît pas dans l'échantillon JSON), dites-le clairement (ex: "Je ne dispose pas d'informations suffisantes dans les données fournies pour répondre précisément à cette question. L'information [mentionner le type d'information recherchée, ex: "sur les rappels liés au verre"] n'apparaît pas dans l'échantillon de rappels disponible pour l'analyse.").
     7.  Structurez votre réponse de manière claire, en utilisant des tirets, des listes ou des paragraphes courts. Commencez par répondre directement à la question si possible, puis ajoutez des précisions ou des limitations basées sur les données.
     8.  Soyez concis et allez droit au but.
     9.  Ne mentionnez pas directement le format JSON ou les "indices" de l'échantillon dans votre réponse à l'utilisateur. Présentez les informations de manière naturelle, comme si vous aviez lu les fiches de rappel.
-    10. Les colonnes importantes pour l'analyse sont : 'nom', 'marque', 'sous_categorie', 'motif', 'risques', 'date_str', 'zone_vente', 'distributeurs', 'conduites_a_tenir'. Concentrez votre analyse sur celles-ci.
+    10. Les colonnes importantes pour l'analyse sont : 'nom', 'marque', 'sous_categorie', 'motif'. Concentrez votre analyse sur celles-ci dans l'échantillon JSON. Les autres colonnes du DataFrame ('risques', 'date_str', 'zone_vente', 'distributeurs', 'conduites_a_tenir') sont incluses dans le résumé mais pas dans l'échantillon JSON pour réduire la taille.
     """
 
     try:
@@ -557,7 +557,7 @@ def get_groq_response(api_key, model, prompt):
             ],
             model=model,
             temperature=0.1, # Température basse pour des réponses factuelles
-            max_tokens=2500, # Augmente légèrement les tokens max pour une réponse plus complète si nécessaire
+            max_tokens=3000, # Augmente légèrement les tokens max pour une réponse plus complète si nécessaire et compte tenu de la plus grande fenêtre de contexte de certains modèles
         )
         return chat_completion.choices[0].message.content
 
@@ -600,15 +600,18 @@ def prepare_data_context(df_filtered):
         context_summary += f"\nRésumé des marques avec le plus de rappels : {top_brands}. " # Clarifié "Résumé"
 
     # Inclure un échantillon des données brutes (limiter le nombre de lignes et les colonnes)
-    # Sélectionner les colonnes les plus utiles pour l'analyse
-    relevant_cols = ['nom', 'marque', 'sous_categorie', 'motif', 'risques', 'date_str', 'zone_vente', 'distributeurs', 'conduites_a_tenir']
+    # Sélectionner les colonnes spécifiées pour l'échantillon JSON
+    relevant_cols_for_sample = ['nom', 'marque', 'sous_categorie', 'motif'] # Colonnes limitées comme demandé
+
     # Filtrer pour garder uniquement les colonnes qui existent dans df_filtered
-    relevant_cols_existing = [col for col in relevant_cols if col in df_filtered.columns]
+    relevant_cols_existing_in_filtered = [col for col in relevant_cols_for_sample if col in df_filtered.columns]
 
     # Taille de l'échantillon JSON augmentée pour les modèles avec grande fenêtre de contexte
-    sample_size = min(len(df_filtered), 200) # Augmente la taille de l'échantillon JSON
-    # Utiliser head(sample_size) pour les plus récents
-    df_sample = df_filtered[relevant_cols_existing].head(sample_size) 
+    # Attention : même avec une grande fenêtre, 200 rappels peuvent être volumineux. Réduire si les erreurs 413 persistent.
+    sample_size = min(len(df_filtered), 200) # Maintien l'échantillon à 200
+
+    # Utiliser head(sample_size) pour les plus récents et sélectionner les colonnes pertinentes pour l'échantillon
+    df_sample = df_filtered[relevant_cols_existing_in_filtered].head(sample_size) 
 
     context_sample = ""
     if not df_sample.empty:
@@ -619,6 +622,7 @@ def prepare_data_context(df_filtered):
         # Convertir l'échantillon en string JSON.
         try:
             list_of_dicts = df_sample_str.to_dict(orient='records')
+            # Utilisation de json.dumps pour plus de contrôle et de robustesse
             context_sample += json.dumps(list_of_dicts, indent=2, ensure_ascii=False)
 
         except Exception as e:
@@ -1101,7 +1105,7 @@ def main():
             
             if search_cols_existing:
                  df_filtered_with_search = df_filtered.copy()
-                 # CORRECTION: S'assurer que 'motif' est bien traité comme string avant de mettre en minuscule
+                 # S'assurer que 'motif' est bien traité comme string avant de mettre en minuscule
                  # On accède directement à la colonne 'motif' car search_cols_existing ne contient que 'motif'
                  # S'assurer que la colonne 'motif' existe avant d'essayer d'y accéder
                  if 'motif' in df_filtered_with_search.columns:
