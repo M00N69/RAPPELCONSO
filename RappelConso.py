@@ -190,9 +190,7 @@ def debug_log(message, data=None):
 # Fixée à "alimentation" pour répondre à la demande.
 CATEGORIES = ["alimentation"]
 
-# --- Modèles Groq disponibles ---
-# Récupérer les modèles disponibles via l'API si possible, sinon utiliser une liste statique
-# Note: Récupérer les modèles via l'API ajoute une dépendance au démarrage. Une liste statique est plus simple.
+# --- Modèles Groq disponibles (liste mise à jour) ---
 GROQ_MODELS = ["llama3-8b-8192", "llama3-70b-8192", "deepseek-r1-distill-llama-70b", "llama-3.3-70b-versatile"]
 
 # --- Fonction de chargement des données avec cache ---
@@ -381,7 +379,9 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
     # Utiliser l'ID comme critère de déduplication.
     initial_rows = len(df)
     if 'id' in df.columns:
+         # IMPORTANT: reset_index() est nécessaire après drop_duplicates si vous comptez utiliser .iloc[] par la suite
          df.drop_duplicates(subset=['id'], keep='first', inplace=True)
+         df.reset_index(drop=True, inplace=True) # Reset index after dropping rows
          if len(df) < initial_rows:
               st.sidebar.warning(f"Supprimé {initial_rows - len(df)} doublons basés sur l'ID.")
     else:
@@ -391,6 +391,7 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
          key_cols_existing = [col for col in key_cols_for_dedup if col in df.columns]
          if len(key_cols_existing) > 0:
               df.drop_duplicates(subset=key_cols_existing, keep='first', inplace=True)
+              df.reset_index(drop=True, inplace=True) # Reset index after dropping rows
               if len(df) < initial_rows:
                    st.sidebar.warning(f"Supprimé {initial_rows - len(df)} doublons basés sur un ensemble de colonnes clés.")
 
@@ -517,20 +518,23 @@ def get_groq_response(api_key, model, prompt):
     if not prompt:
         return "Erreur : Aucune question posée."
 
-    # Nouveau System Prompt plus détaillé
+    # Nouveau System Prompt plus détaillé pour mieux guider l'IA sur l'analyse de l'échantillon JSON
     system_prompt = """
     Vous êtes un expert analyste en sécurité alimentaire et en rappels de produits en France, spécialisé dans l'interprétation des données de RappelConso.
     Votre tâche est de répondre aux questions de l'utilisateur en vous basant *strictement* sur les données de rappels qui vous sont fournies dans le contexte.
-    Les données sont un ensemble filtré de rappels de produits alimentaires. Le contexte inclut un résumé statistique et un échantillon de rappels individuels en format JSON.
+    Les données sont un ensemble filtré de rappels de produits alimentaires. Le contexte inclut un résumé statistique général et un échantillon de rappels individuels en format JSON.
     
     Consignes importantes :
-    1.  **Basez-vous UNIQUEMENT** sur les données fournies dans le contexte. N'utilisez pas de connaissances externes, sauf pour comprendre les termes génériques de sécurité alimentaire (ex: Listeria, Salmonella, allergène, corps étranger).
-    2.  Si une question ne peut pas être répondue avec les données fournies (parce que l'information est absente, ou ne figure pas dans l'échantillon/résumé, ou nécessite une analyse plus poussée que ce que l'échantillon permet), dites-le clairement (ex: "Je ne dispose pas d'informations suffisantes dans les données fournies pour répondre précisément à cette question.").
-    3.  Pour les questions demandant des tendances, des causes principales, des répartitions, ou des caractéristiques de rappels, analysez le résumé statistique et, si nécessaire, examinez les exemples de l'échantillon JSON pour illustrer vos propos.
-    4.  Structurez votre réponse de manière claire, en utilisant des tirets, des listes ou des paragraphes courts.
-    5.  Soyez concis et allez droit au but.
-    6.  Ne mentionnez pas directement le format JSON ou les "indices" de l'échantillon dans votre réponse à l'utilisateur. Présentez les informations de manière naturelle.
-    7.  Les colonnes importantes pour l'analyse sont : 'nom', 'marque', 'sous_categorie', 'motif', 'risques', 'date_str', 'zone_vente', 'distributeurs', 'conduites_a_tenir'. Concentrez votre analyse sur celles-ci.
+    1.  **Basez-vous UNIQUEMENT** sur les données fournies dans le contexte. N'utilisez pas de connaissances externes.
+    2.  Le contexte contient un **Résumé des données** et un **Échantillon de rappels** (JSON). L'échantillon JSON fournit les détails *spécifiques* de chaque rappel listé.
+    3.  Si une question peut être répondue en analysant le **Résumé des données** (ex: les motifs les plus fréquents, les dates extrêmes), faites-le.
+    4.  Si une question nécessite de trouver des rappels *spécifiques* ou des liens *entre* les informations de différents rappels (ex: quels produits sont associés à un risque particulier, quels distributeurs sont listés pour un motif donné), **analysez l'Échantillon de rappels (JSON)** pour trouver les occurrences et les détails nécessaires.
+    5.  Si une question ne peut pas être répondue avec les données fournies (parce que l'information est absente du résumé et n'apparaît pas dans l'échantillon JSON), dites-le clairement (ex: "Je ne dispose pas d'informations suffisantes dans les données fournies pour répondre précisément à cette question. L'information n'apparaît pas dans l'échantillon de rappels disponible pour l'analyse.").
+    6.  Pour les questions demandant des tendances, des causes principales, des répartitions, ou des caractéristiques, utilisez les statistiques du résumé et complétez/illustrez avec des exemples pertinents de l'échantillon JSON si possible.
+    7.  Structurez votre réponse de manière claire, en utilisant des tirets, des listes ou des paragraphes courts.
+    8.  Soyez concis et allez droit au but.
+    9.  Ne mentionnez pas directement le format JSON ou les "indices" de l'échantillon dans votre réponse à l'utilisateur. Présentez les informations de manière naturelle, comme si vous aviez lu les fiches de rappel.
+    10. Les colonnes importantes pour l'analyse sont : 'nom', 'marque', 'sous_categorie', 'motif', 'risques', 'date_str', 'zone_vente', 'distributeurs', 'conduites_a_tenir'. Concentrez votre analyse sur celles-ci.
     """
 
     try:
@@ -577,19 +581,19 @@ def prepare_data_context(df_filtered):
     # Ajouter les informations des top N pour les colonnes pertinentes s'ils existent et ne sont pas vides après filtrage
     if 'sous_categorie' in df_filtered.columns and not df_filtered['sous_categorie'].dropna().empty:
         top_subcats = df_filtered['sous_categorie'].value_counts().nlargest(5).to_dict()
-        context_summary += f"\nSous-catégories les plus fréquentes : {top_subcats}. "
+        context_summary += f"\nRésumé des sous-catégories les plus fréquentes : {top_subcats}. " # Clarifié "Résumé"
 
     if 'motif' in df_filtered.columns and not df_filtered['motif'].dropna().empty:
         top_motifs = df_filtered['motif'].value_counts().nlargest(5).to_dict()
-        context_summary += f"\nMotifs de rappel les plus fréquents : {top_motifs}. "
+        context_summary += f"\nRésumé des motifs de rappel les plus fréquents : {top_motifs}. " # Clarifié "Résumé"
 
     if 'risques' in df_filtered.columns and not df_filtered['risques'].dropna().empty:
         top_risks = df_filtered['risques'].value_counts().nlargest(5).to_dict()
-        context_summary += f"\nRisques les plus fréquents : {top_risks}. "
+        context_summary += f"\nRésumé des risques les plus fréquents : {top_risks}. " # Clarifié "Résumé"
         
     if 'marque' in df_filtered.columns and not df_filtered['marque'].dropna().empty:
         top_brands = df_filtered['marque'].value_counts().nlargest(5).to_dict()
-        context_summary += f"\nMarques avec le plus de rappels : {top_brands}. "
+        context_summary += f"\nRésumé des marques avec le plus de rappels : {top_brands}. " # Clarifié "Résumé"
 
     # Inclure un échantillon des données brutes (limiter le nombre de lignes et les colonnes)
     # Sélectionner les colonnes les plus utiles pour l'analyse
@@ -597,9 +601,10 @@ def prepare_data_context(df_filtered):
     # Filtrer pour garder uniquement les colonnes qui existent dans df_filtered
     relevant_cols_existing = [col for col in relevant_cols if col in df_filtered.columns]
 
-    # Limiter à un nombre raisonnable de rappels pour ne pas dépasser la limite de tokens
-    sample_size = min(len(df_filtered), 50) 
-    # Utiliser head(sample_size) pour les plus récents et sélectionner seulement les colonnes pertinentes
+    # Limiter à un nombre *très* raisonnable de rappels pour l'échantillon JSON
+    # L'objectif est de fournir des exemples, pas une base de données complète
+    sample_size = min(len(df_filtered), 20) # Réduit la taille de l'échantillon
+    # Utiliser head(sample_size) pour les plus récents
     df_sample = df_filtered[relevant_cols_existing].head(sample_size) 
 
     context_sample = ""
@@ -608,19 +613,20 @@ def prepare_data_context(df_filtered):
         # Cela résout les problèmes potentiels avec des types non standards dans certaines cellules.
         df_sample_str = df_sample.astype(str) 
         
-        context_sample = "\n\nÉchantillon de rappels (format JSON, limité aux colonnes pertinentes et premières lignes) :\n"
-        # Convertir l'échantillon en string JSON. Utiliser default=str pour gérer les types non sérialisables si nécessaire.
-        # Ignorer les erreurs si la conversion JSON échoue pour certaines valeurs
+        context_sample = "\n\nÉchantillon de rappels (JSON) :\n" # Simplifié le libellé
+        # Convertir l'échantillon en string JSON.
+        # Utiliser .to_json sur le DataFrame déjà converti en string pour éviter les erreurs de sérialisation
         # force_ascii=False pour garder les accents
         try:
-            context_sample += df_sample_str.to_json(orient='records', indent=2, force_ascii=False, default=str) 
+            context_sample += df_sample_str.to_json(orient='records', indent=2, force_ascii=False) 
         except Exception as e:
              debug_log("Error converting sample to JSON after astype(str)", e)
              # Afficher un message d'erreur plus explicite si la conversion JSON échoue
-             context_sample = f"\nÉchantillon de rappels : Échantillon non disponible en raison d'une erreur de formatage JSON ({e}).\n" 
+             context_sample = f"\nÉchantillon de rappels (JSON) : Échantillon non disponible en raison d'une erreur de formatage ({e}).\n" 
 
 
     full_context = context_summary + context_sample
+
     return full_context
 
 # --- Fonction principale ---
@@ -642,7 +648,7 @@ def main():
     if "items_per_page_search" not in st.session_state: st.session_state.items_per_page_search = 10
     if "groq_api_key" not in st.session_state: st.session_state.groq_api_key = ""
     # Correction ici : s'assurer que l'état groq_model est un modèle valide dès l'initialisation
-    if "groq_model" not in st.session_state or st.session_state.groq_model not in GROQ_MODELS:
+    if "groq_model" not in st.session_state or (st.session_state.groq_model is not None and st.session_state.groq_model not in GROQ_MODELS):
         st.session_state.groq_model = GROQ_MODELS[0] if GROQ_MODELS else None # Utiliser le premier modèle comme défaut si la liste n'est pas vide
     if "ai_question" not in st.session_state: st.session_state.ai_question = ""
     if "ai_response" not in st.session_state: st.session_state.ai_response = ""
@@ -864,7 +870,7 @@ def main():
     if not df_filtered.empty:
          st.markdown("---") # Séparateur visuel
          # Correction : Générer le CSV à la demande dans le lambda pour s'assurer qu'il est à jour
-         @st.cache_data(ttl=60) # Cache le CSV pour 60s pour éviter de le regénérer à chaque rerun mineur
+         @st.cache_data(ttl=60) # Cache le CSV pour 60s pour éviter de le regénérer à chaque rerun minor
          def convert_df_to_csv(df):
              # Utiliser .copy() ici avant to_csv pour éviter les SettingWithCopyWarning potentielles
              # si df_filtered_copy était modifiée avant le to_csv
@@ -934,11 +940,12 @@ def main():
          else:
              # Préparer le prompt pour l'IA
              data_context = prepare_data_context(df_filtered)
-             full_prompt = f"Données contextuelles sur les rappels :\n{data_context}\n\nQuestion de l'utilisateur :\n{ai_question}\n\nRéponse :"
+             # Le prompt inclut le system prompt (dans get_groq_response) et ce contenu utilisateur
+             full_prompt_content = f"Données contextuelles sur les rappels :\n{data_context}\n\nQuestion de l'utilisateur :\n{ai_question}\n\nRéponse :"
 
              # Appeler l'API Groq avec un spinner
              with st.spinner("L'IA analyse les données..."):
-                 st.session_state.ai_response = get_groq_response(groq_api_key, groq_model, full_prompt)
+                 st.session_state.ai_response = get_groq_response(groq_api_key, groq_model, full_prompt_content)
                  st.session_state.last_ai_question = ai_question # Sauvegarder la question posée
 
              st.toast("Analyse IA terminée !", icon="🤖")
@@ -974,6 +981,7 @@ def main():
         ))
         
         # Comparer le hash actuel avec le dernier hash enregistré pour la pagination principale
+        # Utiliser .get() avec un défaut pour éviter les erreurs au tout premier run
         if st.session_state.get("pagination_state_main") != current_pagination_state_main:
              st.session_state.current_page = 1 # Réinitialiser à la page 1 si les filtres/items par page changent
              st.session_state.pagination_state_main = current_pagination_state_main # Mettre à jour le hash enregistré
@@ -987,7 +995,8 @@ def main():
         if total_items_main > 0:
             # CORRECTION: Obtenir la sous-section du DataFrame pour la page actuelle
             # Utiliser .iloc pour la sélection par position, puis reset_index pour avoir des indices 0, 1, 2... sur la page
-            page_df_main = df_filtered.iloc[start_idx_main:end_idx_main].reset_index(drop=True) 
+            # .copy() est une bonne pratique ici pour éviter les SettingWithCopyWarning potentielles
+            page_df_main = df_filtered.iloc[start_idx_main:end_idx_main].copy().reset_index(drop=True) 
             
             # Itérer sur les indices locaux de cette sous-section (0, 1, 2...) par pas de 2
             # len(page_df_main) donne le nombre d'éléments sur la page actuelle
@@ -1131,7 +1140,8 @@ def main():
 
             # CORRECTION: Obtenir la sous-section du DataFrame pour la page actuelle de recherche
             # Utiliser .iloc pour la sélection par position, puis reset_index pour avoir des indices 0, 1, 2... sur la page
-            page_df_search = search_results_df.iloc[start_idx_search:end_idx_search].reset_index(drop=True) 
+            # .copy() est une bonne pratique ici pour éviter les SettingWithCopyWarning potentielles
+            page_df_search = search_results_df.iloc[start_idx_search:end_idx_search].copy().reset_index(drop=True) 
 
             # Afficher en 2 colonnes en itérant sur les indices locaux de cette sous-section
             for i in range(0, len(page_df_search), 2):
