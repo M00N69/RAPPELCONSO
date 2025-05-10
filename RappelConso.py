@@ -6,6 +6,7 @@ import time
 import plotly.express as px
 import numpy as np
 import math
+from groq import Groq # Importez la librairie Groq
 
 # --- Configuration de la page ---
 st.set_page_config(
@@ -149,6 +150,11 @@ st.markdown("""
         color: white;
     }
 
+     /* Style for AI analysis button */
+     .stButton button[data-testid="stButton"] {
+         /* Find the AI button specifically by its key or location if needed */
+     }
+
 
 </style>
 """, unsafe_allow_html=True)
@@ -174,6 +180,8 @@ def debug_log(message, data=None):
 # Fixée à "alimentation" pour répondre à la demande.
 CATEGORIES = ["alimentation"]
 
+# --- Modèles Groq disponibles ---
+GROQ_MODELS = ["llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768", "gemma-7b-it"]
 
 # --- Fonction de chargement des données avec cache ---
 @st.cache_data(ttl=3600, show_spinner=False) # Cache pendant 1 heure, cache key dépend des paramètres
@@ -224,7 +232,7 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
         debug_log(f"Estimation Total Count API (cat: {actual_category_to_load}, date: >={start_date_str}): {total_count}", data)
         
         if total_count == 0:
-            status_text.warning(f"Aucun rappel trouvé avec les filtres initiaux (catégorie: '{actual_category_to_load}').")
+            status_text.warning(f"Aucun rappel trouvé avec les filtres initiaux (catégorie: '{actual_category_to_loaded}').")
             progress_bar.progress(1.0)
             return pd.DataFrame()
 
@@ -312,7 +320,16 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
         "libelle": "nom",
         "id": "id",
         "zone_geographique_de_vente": "zone_vente",
-        "conduites_a_tenir_par_le_consommateur": "conduites_a_tenir"
+        "conduites_a_tenir_par_le_consommateur": "conduites_a_tenir",
+        "date_debut_commercialisation": "date_debut_commercialisation",
+        "date_date_fin_commercialisation": "date_fin_commercialisation",
+        "temperature_conservation": "temperature_conservation",
+        "marque_salubrite": "marque_salubrite",
+        "informations_complementaires": "informations_complementaires",
+        "description_complementaire_risque": "description_complementaire_risque",
+        "numero_contact": "numero_contact",
+        "modalites_de_compensation": "modalites_de_compensation",
+        "date_de_fin_de_la_procedure_de_rappel": "date_fin_procedure"
     }
     
     # Appliquer le renommage des colonnes existantes
@@ -397,8 +414,8 @@ def display_recall_card(row):
         
         st.markdown(f"<h4>{nom}</h4>", unsafe_allow_html=True)
         st.markdown(f"<p><strong>Marque:</strong> {marque}</p>", unsafe_allow_html=True)
-        st.markdown(f"<p><strong>Date de publication:</strong> {date_str}</p>", unsafe_allow_html=True)
-        st.markdown(f"<p><strong>Catégorie:</strong> {categorie} > {sous_categorie}</p>", unsafe_allow_html=True)
+        st.markdown(f("<p><strong>Date de publication:</strong> {}</p>").format(date_str), unsafe_allow_html=True)
+        st.markdown(f("<p><strong>Catégorie:</strong> {} > {}</p>").format(categorie, sous_categorie), unsafe_allow_html=True) # Use > for > in HTML
         st.markdown(f"<p><strong>Risques:</strong> <span class='{risk_class}'>{risques}</span></p>", unsafe_allow_html=True)
         
         # Afficher l'image si disponible, centrée dans la colonne
@@ -431,30 +448,97 @@ def display_pagination_controls(current_page_state_key, total_items, items_per_p
     total_pages = math.ceil(total_items / items_per_page) if total_items > 0 else 1
 
     # S'assurer que la page actuelle ne dépasse pas le total de pages (peut arriver après filtrage ou recherche)
-    if st.session_state[current_page_state_key] > total_pages:
+    if st.session_state.get(current_page_state_key, 1) > total_pages:
          st.session_state[current_page_state_key] = total_pages
-    if st.session_state[current_page_state_key] < 1:
+    if st.session_state.get(current_page_state_key, 1) < 1:
          st.session_state[current_page_state_key] = 1
 
 
     col_prev, col_info, col_next = st.columns([1, 3, 1])
 
     with col_prev:
-        if st.session_state[current_page_state_key] > 1:
+        if st.session_state.get(current_page_state_key, 1) > 1:
             # Ajout d'une clé dynamique pour éviter les conflits si plusieurs paginations sur la même page (non le cas ici, mais bonne pratique)
             if st.button("← Précédent", key=f"btn_prev_{current_page_state_key}"):
-                st.session_state[current_page_state_key] -= 1
+                st.session_state[current_page_state_key] = st.session_state.get(current_page_state_key, 1) - 1
                 st.rerun()
 
     with col_info:
-        st.markdown(f"<div style='text-align:center;'>Page {st.session_state[current_page_state_key]} sur {total_pages}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:center;'>Page {st.session_state.get(current_page_state_key, 1)} sur {total_pages}</div>", unsafe_allow_html=True)
 
     with col_next:
-        if st.session_state[current_page_state_key] < total_pages:
+        if st.session_state.get(current_page_state_key, 1) < total_pages:
              # Ajout d'une clé dynamique
             if st.button("Suivant →", key=f"btn_next_{current_page_state_key}"):
-                st.session_state[current_page_state_key] += 1
+                st.session_state[current_page_state_key] = st.session_state.get(current_page_state_key, 1) + 1
                 st.rerun()
+
+# Fonction pour interagir avec l'API Groq
+def get_groq_response(api_key, model, prompt):
+    """Envoie un prompt à l'API Groq et retourne la réponse."""
+    if not api_key:
+        return "Erreur : Clé API Groq non fournie."
+    if not model:
+        return "Erreur : Modèle Groq non sélectionné."
+    if not prompt:
+        return "Erreur : Aucune question posée."
+
+    try:
+        client = Groq(api_key=api_key)
+
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Vous êtes un assistant spécialisé dans l'analyse des données de rappels de produits alimentaires en France, basées sur les données de RappelConso. Répondez aux questions en vous basant *uniquement* sur les données que vous avez reçues en contexte. Si vous ne pouvez pas répondre à partir des données, dites-le clairement. Soyez concis et informatif. Le contexte des données vous sera fourni sous forme de résumé et d'exemples."
+                },
+                {
+                    "role": "user",
+                    "content": prompt, # Le prompt inclura la question de l'utilisateur et le contexte des données
+                }
+            ],
+            model=model,
+            temperature=0.1, # Température basse pour des réponses factuelles
+            max_tokens=1500, # Limite pour éviter des réponses trop longues et coûteuses
+        )
+        return chat_completion.choices[0].message.content
+
+    except Exception as e:
+        debug_log("Erreur API Groq", e)
+        return f"Une erreur est survenue lors de l'appel à l'API Groq : {e}"
+
+# Fonction pour préparer le contexte des données filtrées pour l'IA
+def prepare_data_context(df_filtered):
+    """Prépare un résumé textuel des données filtrées pour le modèle IA."""
+    if df_filtered.empty:
+        return "Aucune donnée de rappel n'est disponible pour l'analyse."
+
+    total_count = len(df_filtered)
+    date_min = df_filtered['date_str'].min() if 'date_str' in df_filtered.columns and not df_filtered['date_str'].isna().all() else "N/A"
+    date_max = df_filtered['date_str'].max() if 'date_str' in df_filtered.columns and not df_filtered['date_str'].isna().all() else "N/A"
+
+    context = f"Analyse basée sur {total_count} rappels de produits alimentaires publiés entre le {date_min} et le {date_max}. "
+
+    if 'sous_categorie' in df_filtered.columns:
+        top_subcats = df_filtered['sous_categorie'].value_counts().nlargest(5).to_dict()
+        context += f"\nSous-catégories les plus fréquentes : {top_subcats}. "
+
+    if 'motif' in df_filtered.columns:
+        top_motifs = df_filtered['motif'].value_counts().nlargest(5).to_dict()
+        context += f"\nMotifs de rappel les plus fréquents : {top_motifs}. "
+
+    if 'risques' in df_filtered.columns:
+        top_risks = df_filtered['risques'].value_counts().nlargest(5).to_dict()
+        context += f"\nRisques les plus fréquents : {top_risks}. "
+
+    # Optionnel : Ajouter quelques exemples de rappels (limité pour le contexte)
+    # C'est souvent plus efficace d'envoyer un résumé + les colonnes disponibles
+    context += f"\nColonnes disponibles dans les données : {list(df_filtered.columns)}. "
+    # context += "\nExemples de rappels (limité) :\n"
+    # context += df_filtered[['nom', 'marque', 'motif', 'risques', 'date_str']].head(5).to_string(index=False) # Ajouter quelques colonnes pertinentes
+
+
+    return context
 
 # --- Fonction principale ---
 def main():
@@ -479,6 +563,15 @@ def main():
         st.session_state.items_per_page_main = 10 # Default 10 items total per page (5 pairs)
     if "items_per_page_search" not in st.session_state:
         st.session_state.items_per_page_search = 10 # Default 10 items total per page (5 pairs)
+    # États pour l'analyse IA
+    if "groq_api_key" not in st.session_state:
+        st.session_state.groq_api_key = ""
+    if "groq_model" not in st.session_state:
+        st.session_state.groq_model = GROQ_MODELS[0] if GROQ_MODELS else ""
+    if "ai_question" not in st.session_state:
+        st.session_state.ai_question = ""
+    if "ai_response" not in st.session_state:
+        st.session_state.ai_response = ""
 
 
     # En-tête
@@ -537,6 +630,9 @@ def main():
         st.session_state.search_current_page = 1 # Reset search results pagination
         # Ne pas réinitialiser l'input de recherche, l'utilisateur pourrait vouloir relancer la même recherche
         # st.session_state.quick_search_input = "" # Clear search input
+        # Réinitialiser la réponse IA
+        st.session_state.ai_response = ""
+
 
         status_message.empty() # Clear the loading message (if it was there)
         # Use st.toast or st.success for feedback after loading
@@ -616,11 +712,12 @@ def main():
         with col4: st.markdown(f"""<div class="metric"><div class="metric-value">0</div><div>Marques uniques</div></div>""", unsafe_allow_html=True)
         
         # Afficher les onglets mais avec des messages d'absence de données à l'intérieur
-        tab1, tab2, tab3 = st.tabs(["📋 Liste des rappels", "📊 Visualisations", "🔍 Recherche rapide"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📋 Liste des rappels", "📊 Visualisations", "🔍 Recherche rapide", "🤖 Analyse IA"])
         with tab1: st.info("Aucun rappel à afficher avec les filtres sélectionnés.")
         with tab2: st.info("Aucune donnée à visualiser avec les filtres sélectionnés.")
         with tab3: st.info("Aucune donnée à rechercher avec les filtres sélectionnés.")
-        
+        with tab4: st.info("Aucune donnée disponible pour l'analyse IA avec les filtres sélectionnés.")
+
         return # Arrêter l'exécution de main() ici si df_filtered est vide
 
 
@@ -694,23 +791,94 @@ def main():
          st.markdown("---") # Séparateur visuel
 
 
-    # --- Afficher les onglets ---
-    tab1, tab2, tab3 = st.tabs(["📋 Liste des rappels", "📊 Visualisations", "🔍 Recherche rapide"])
+    # --- Section Analyse IA dans la Sidebar ---
+    st.sidebar.markdown("---")
+    st.sidebar.title("🤖 Analyse IA")
+    st.sidebar.info("Analysez les données filtrées à l'aide de l'IA Groq.")
+
+    # Input Clé API Groq
+    groq_api_key = st.sidebar.text_input(
+        "Votre clé API Groq :",
+        type="password",
+        value=st.session_state.groq_api_key,
+        key="groq_api_key_input", # Clé unique
+        help="Entrez votre clé API Groq (vous pouvez l'obtenir sur console.groq.com). La clé n'est pas enregistrée durablement."
+    )
+    st.session_state.groq_api_key = groq_api_key # Sauvegarder dans l'état de session
+
+    # Sélection du modèle Groq
+    groq_model = st.sidebar.selectbox(
+        "Choisissez le modèle :",
+        options=GROQ_MODELS,
+        index=GROQ_MODELS.index(st.session_state.groq_model) if st.session_state.groq_model in GROQ_MODELS else 0,
+        key="groq_model_select", # Clé unique
+        help="Sélectionnez le modèle d'IA Groq à utiliser."
+    )
+    st.session_state.groq_model = groq_model # Sauvegarder dans l'état de session
+
+    # Champ de texte pour la question de l'utilisateur
+    ai_question = st.sidebar.text_area(
+        "Posez une question sur les données filtrées :",
+        value=st.session_state.ai_question,
+        key="ai_question_input", # Clé unique
+        height=150,
+        placeholder="Ex: Quelles sont les principales causes de rappels ? Y a-t-il des tendances récentes ?",
+        help="L'IA analysera les données actuellement affichées (filtrées)."
+    )
+    st.session_state.ai_question = ai_question # Sauvegarder dans l'état de session
+
+    # Bouton pour déclencher l'analyse
+    analyze_button = st.sidebar.button("Analyser avec l'IA", type="secondary")
+
+    # --- Logic to trigger AI analysis ---
+    if analyze_button:
+         if not groq_api_key:
+             st.sidebar.error("Veuillez entrer votre clé API Groq.")
+         elif not groq_model:
+             st.sidebar.error("Veuillez sélectionner un modèle Groq.")
+         elif not ai_question:
+             st.sidebar.warning("Veuillez poser une question.")
+         elif df_filtered.empty:
+              st.sidebar.warning("Aucune donnée filtrée à analyser. Veuillez charger des données ou ajuster les filtres.")
+         else:
+             # Préparer le prompt pour l'IA
+             data_context = prepare_data_context(df_filtered)
+             full_prompt = f"Données contextuelles sur les rappels :\n{data_context}\n\nQuestion de l'utilisateur :\n{ai_question}\n\nRéponse :"
+
+             # Appeler l'API Groq avec un spinner
+             with st.spinner("L'IA analyse les données..."):
+                 st.session_state.ai_response = get_groq_response(groq_api_key, groq_model, full_prompt)
+
+             # Forcer le passage à l'onglet Analyse IA après la réponse
+             # On ne peut pas changer l'onglet directement dans la sidebar
+             # On pourrait utiliser un paramètre d'URL ou une astuce JS si nécessaire,
+             # mais pour l'instant, l'utilisateur devra cliquer sur l'onglet.
+             st.toast("Analyse IA terminée !", icon="🤖")
+             # Potentiellement stocker l'état de l'onglet sélectionné pour y aller automatiquement
+             # st.session_state.current_tab = "Analyse IA" # Exemple (non implémenté dans ce code)
+             st.rerun() # Rerun pour mettre à jour l'affichage principal avec la réponse
+
+
+    # --- Afficher les onglets (avec le nouvel onglet IA) ---
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 Liste des rappels", "📊 Visualisations", "🔍 Recherche rapide", "🤖 Analyse IA"])
     
+    # Stocker l'onglet actif si vous voulez qu'il reste sélectionné
+    # current_active_tab = st.session_state.get("current_tab", "Liste des rappels")
+    # Assigner le contenu aux onglets...
+
     with tab1:
+        # ... (le contenu de l'onglet Liste des rappels reste le même) ...
         # Pagination des rappels filtrés
         st.subheader("Liste des rappels filtrés")
         
-        # Slider pour le nombre d'items par page (affecte la pagination principale)
         items_per_page_main = st.select_slider(
             "Rappels par page:",
             options=[5, 10, 20, 50],
-            value=st.session_state.items_per_page_main, # Utiliser l'état de session
+            value=st.session_state.items_per_page_main,
             key="slider_items_per_page_main"
         )
         st.session_state.items_per_page_main = items_per_page_main
 
-        # Réinitialiser la page si les filtres changent ou si le nombre d'items par page change
         current_pagination_state_main = hash((tuple(selected_subcategories), tuple(selected_brands), tuple(selected_risks), items_per_page_main))
         if "pagination_state_main" not in st.session_state or st.session_state.pagination_state_main != current_pagination_state_main:
              st.session_state.current_page = 1
@@ -718,247 +886,164 @@ def main():
 
         total_items_main = len(df_filtered)
         
-        # Afficher les rappels de la page actuelle en 2 colonnes
         start_idx_main = (st.session_state.current_page - 1) * items_per_page_main
         end_idx_main = min(start_idx_main + items_per_page_main, total_items_main)
 
         if total_items_main > 0:
-            # Afficher en 2 colonnes
-            # On itère sur les indices de start_idx à end_idx
             indices_to_display = range(start_idx_main, end_idx_main)
             for i in range(0, len(indices_to_display), 2):
                 col1, col2 = st.columns(2)
-                
-                # Afficher le premier produit de la paire
                 item_index_1 = indices_to_display[i]
                 with col1:
                     display_recall_card(df_filtered.iloc[item_index_1])
-                
-                # Afficher le deuxième produit si il existe
-                if i + 1 < len(indices_to_display): # Vérifier si le deuxième produit est dans la tranche actuelle d'indices
+                if i + 1 < len(indices_to_display):
                     item_index_2 = indices_to_display[i+1]
                     with col2:
                          display_recall_card(df_filtered.iloc[item_index_2])
-                # else:
-                #    with col2:
-                #         st.empty() # Streamlit gère les colonnes vides automatiquement
 
-            # Afficher les contrôles de pagination pour la liste principale
             display_pagination_controls("current_page", total_items_main, items_per_page_main)
 
         else:
             st.info("Aucun rappel à afficher avec les filtres actuels.")
 
+
     with tab2:
-        # Visualisations
+        # ... (le contenu de l'onglet Visualisations reste le même) ...
         st.subheader("Visualisations des données filtrées")
         
-        # Évolution temporelle des rappels
         st.write("### Évolution des rappels par mois")
-        
-        # Filtrer les lignes avec date NaT avant de grouper
         df_filtered_valid_dates = df_filtered.dropna(subset=['date'])
-
         if "date" in df_filtered_valid_dates.columns and not df_filtered_valid_dates.empty:
             try:
-                # Grouper par mois en utilisant la colonne datetime
                 monthly_counts = df_filtered_valid_dates.groupby(df_filtered_valid_dates['date'].dt.to_period('M')).size().reset_index(name="count")
                 monthly_counts["month_str"] = monthly_counts["date"].astype(str)
-                
-                # Trier chronologiquement les mois
                 monthly_counts = monthly_counts.sort_values("month_str")
-
                 if not monthly_counts.empty:
-                    fig_time = px.line(
-                        monthly_counts,
-                        x="month_str",
-                        y="count",
-                        title="Nombre de rappels par mois",
-                        labels={"month_str": "Mois", "count": "Nombre de rappels"},
-                        markers=True
-                    )
-                    fig_time.update_layout(xaxis_title="Mois", yaxis_title="Nombre de rappels", hovermode="x unified") # Améliorer le survol
+                    fig_time = px.line(monthly_counts, x="month_str", y="count", title="Nombre de rappels par mois", labels={"month_str": "Mois", "count": "Nombre de rappels"}, markers=True)
+                    fig_time.update_layout(xaxis_title="Mois", yaxis_title="Nombre de rappels", hovermode="x unified")
                     st.plotly_chart(fig_time, use_container_width=True)
-                else:
-                    st.warning("Pas assez de données temporelles valides pour créer un graphique.")
-            except Exception as e:
-                st.error(f"Erreur lors de la création du graphique temporel: {str(e)}")
-                debug_log("Time series chart error", e)
-        else:
-            st.info("La colonne de date n'est pas disponible ou contient des valeurs manquantes dans les données filtrées.")
+                else: st.warning("Pas assez de données temporelles valides pour créer un graphique.")
+            except Exception as e: st.error(f"Erreur lors de la création du graphique temporel: {str(e)}"); debug_log("Time series chart error", e)
+        else: st.info("La colonne de date n'est pas disponible ou contient des valeurs manquantes dans les données filtrées.")
 
-
-        # Distribution par sous-catégorie
         if "sous_categorie" in df_filtered.columns:
             st.write("### Répartition par sous-catégorie")
-            
             valid_subcats = df_filtered["sous_categorie"].dropna()
-            
             if not valid_subcats.empty:
                 num_top_subcats = st.slider("Nombre de sous-catégories à afficher:", 5, 30, 10, key="subcat_slider")
                 top_subcats = valid_subcats.value_counts().nlargest(num_top_subcats)
-                
-                fig_subcat = px.pie(
-                    values=top_subcats.values,
-                    names=top_subcats.index,
-                    title=f"Top {num_top_subcats} des sous-catégories",
-                    hole=0.3 # Add donut chart style
-                )
+                fig_subcat = px.pie(values=top_subcats.values, names=top_subcats.index, title=f"Top {num_top_subcats} des sous-catégories", hole=0.3)
                 fig_subcat.update_traces(textposition='inside', textinfo='percent+label')
                 st.plotly_chart(fig_subcat, use_container_width=True)
-            else:
-                st.info("Aucune donnée de sous-catégorie disponible dans les données filtrées.")
-        
-        # Distribution par type de risque
+            else: st.info("Aucune donnée de sous-catégorie disponible dans les données filtrées.")
+
         if "risques" in df_filtered.columns:
             st.write("### Répartition par type de risque")
-            
             valid_risks = df_filtered["risques"].dropna()
-            
             if not valid_risks.empty:
                 risk_counts = valid_risks.value_counts().reset_index()
                 risk_counts.columns = ["risk", "count"]
-
                 risk_counts['risk_level'] = risk_counts['risk'].apply(get_risk_class)
-
-                risk_counts['risk_level_label'] = risk_counts['risk_level'].map({
-                     'risk-high': 'Risque Élevé',
-                     'risk-medium': 'Risque Moyen',
-                     'risk-low': 'Risque Faible'
-                })
-                
+                risk_counts['risk_level_label'] = risk_counts['risk_level'].map({'risk-high': 'Risque Élevé', 'risk-medium': 'Risque Moyen', 'risk-low': 'Risque Faible'})
                 risk_level_order = ['Risque Élevé', 'Risque Moyen', 'Risque Faible']
                 risk_counts['risk_level_label'] = pd.Categorical(risk_counts['risk_level_label'], categories=risk_level_order, ordered=True)
                 risk_counts = risk_counts.sort_values(['risk_level_label', 'count'], ascending=[True, False])
-
-                fig_risks = px.bar(
-                    risk_counts,
-                    x="risk",
-                    y="count",
-                    title="Répartition par type de risque",
-                    labels={"risk": "Type de risque", "count": "Nombre de rappels", "risk_level_label": "Niveau de risque"},
-                    color="risk_level_label", # Colorer par niveau de risque
-                    color_discrete_map={
-                         'Risque Élevé': '#e74c3c',
-                         'Risque Moyen': '#f39c12',
-                         'Risque Faible': '#27ae60'
-                    }
-                )
-                
+                fig_risks = px.bar(risk_counts, x="risk", y="count", title="Répartition par type de risque", labels={"risk": "Type de risque", "count": "Nombre de rappels", "risk_level_label": "Niveau de risque"}, color="risk_level_label", color_discrete_map={'Risque Élevé': '#e74c3c', 'Risque Moyen': '#f39c12', 'Risque Faible': '#27ae60'})
                 fig_risks.update_layout(xaxis_tickangle=-45)
-                
                 st.plotly_chart(fig_risks, use_container_width=True)
-            else:
-                st.info("Aucune donnée de risque disponible dans les données filtrées.")
+            else: st.info("Aucune donnée de risque disponible dans les données filtrées.")
 
-        # Distribution par marque (Top N)
         if "marque" in df_filtered.columns:
              st.write("### Marques les plus fréquentes")
              valid_brands = df_filtered["marque"].dropna()
              if not valid_brands.empty:
                  num_top_brands = st.slider("Nombre de marques à afficher:", 5, 30, 10, key="top_brands_slider")
                  top_brands = valid_brands.value_counts().nlargest(num_top_brands)
-                 fig_brands = px.bar(
-                     x=top_brands.index,
-                     y=top_brands.values,
-                     title=f"Top {num_top_brands} des marques",
-                     labels={"x": "Marque", "y": "Nombre de rappels"}
-                 )
+                 fig_brands = px.bar(x=top_brands.index, y=top_brands.values, title=f"Top {num_top_brands} des marques", labels={"x": "Marque", "y": "Nombre de rappels"})
                  fig_brands.update_layout(xaxis_tickangle=-45)
                  st.plotly_chart(fig_brands, use_container_width=True)
-             else:
-                 st.info("Aucune donnée de marque disponible dans les données filtrées.")
+             else: st.info("Aucune donnée de marque disponible dans les données filtrées.")
 
 
     with tab3:
-        # Recherche rapide dans les données filtrées
+        # ... (le contenu de l'onglet Recherche rapide reste le même, recherche limitée au motif) ...
         st.subheader("Recherche rapide dans les rappels affichés (champ: Motif)")
         
-        # Utiliser session state pour maintenir la valeur de l'input de recherche
         search_term = st.text_input(
             "Entrez un terme pour rechercher dans le Motif du rappel:",
             placeholder="Ex: listéria, salmonelle, corps étranger",
+            value=st.session_state.quick_search_input, # Utiliser l'état de session
             key="quick_search_input" # Clé unique
         )
+        st.session_state.quick_search_input = search_term # Sauvegarder la valeur
 
-        # Appliquer la recherche si un terme est saisi
-        search_results_df = pd.DataFrame() # Initialiser un dataframe vide
+        search_results_df = pd.DataFrame()
         if search_term:
             search_term_lower = search_term.lower()
-            
-            # Colonnes sur lesquelles effectuer la recherche rapide : UNIQUEMENT LE MOTIF
             search_cols = ["motif"]
             search_cols_existing = [col for col in search_cols if col in df_filtered.columns]
             
             if search_cols_existing:
-                 # Créer une colonne texte combinée pour la recherche (ici, juste le motif)
                  df_filtered_with_search = df_filtered.copy()
-                 # Concaténer seulement les colonnes existantes et gérées (ici, juste 'motif')
                  df_filtered_with_search['search_text'] = df_filtered_with_search[search_cols_existing].astype(str).fillna('').agg(' '.join, axis=1).str.lower()
-
-                 # Appliquer le filtre de recherche
-                 search_results_df = df_filtered_with_search[df_filtered_with_search['search_text'].str.contains(search_term_lower, na=False)].copy() # Utiliser .copy() ici aussi
-
-                 # La colonne temporaire 'search_text' n'est pas nécessaire dans le df_filtered original
+                 search_results_df = df_filtered_with_search[df_filtered_with_search['search_text'].str.contains(search_term_lower, na=False)].copy()
 
             st.markdown(f"**{len(search_results_df)}** résultats trouvés pour '{search_term}' dans le Motif.")
 
         if search_term and not search_results_df.empty:
-            # --- Pagination pour les résultats de recherche ---
-            st.markdown("---") # Séparateur visuel
+            st.markdown("---")
             st.write("Navigation dans les résultats de recherche:")
 
-            # Slider pour le nombre d'items par page (spécifique à la recherche)
             items_per_page_search = st.select_slider(
                 "Résultats par page:",
                 options=[5, 10, 20, 50],
-                value=st.session_state.items_per_page_search, # Utiliser l'état de session
+                value=st.session_state.items_per_page_search,
                 key="slider_items_per_page_search"
             )
             st.session_state.items_per_page_search = items_per_page_search
 
-            # Réinitialiser la page de recherche si le terme de recherche ou items_per_page_search change
             current_pagination_state_search = hash((search_term_lower, items_per_page_search))
-            # Ne réinitialiser que si le terme de recherche change *et* qu'il n'est pas vide
+            # Réinitialiser seulement si le terme de recherche change ET il n'est pas vide, OU si la pagination_state change
             if (st.session_state.get("last_search_term", "") != search_term_lower and search_term_lower != "") or \
                ("pagination_state_search" not in st.session_state or st.session_state.pagination_state_search != current_pagination_state_search):
                  st.session_state.search_current_page = 1
                  st.session_state.pagination_state_search = current_pagination_state_search
-            st.session_state.last_search_term = search_term_lower # Mettre à jour le dernier terme recherché
-
+            st.session_state.last_search_term = search_term_lower
 
             total_items_search = len(search_results_df)
-
-            # Afficher les rappels de la page actuelle en 2 colonnes
             start_idx_search = (st.session_state.search_current_page - 1) * items_per_page_search
             end_idx_search = min(start_idx_search + items_per_page_search, total_items_search)
 
-            # Afficher en 2 colonnes
             indices_to_display_search = range(start_idx_search, end_idx_search)
             for i in range(0, len(indices_to_display_search), 2):
                 col1, col2 = st.columns(2)
-                
-                # Afficher le premier produit de la paire
                 item_index_1 = indices_to_display_search[i]
                 with col1:
                     display_recall_card(search_results_df.iloc[item_index_1])
-                
-                # Afficher le deuxième produit si il existe
-                if i + 1 < len(indices_to_display_search): # Vérifier si le deuxième produit est dans la tranche actuelle d'indices
+                if i + 1 < len(indices_to_display_search):
                     item_index_2 = indices_to_display_search[i+1]
                     with col2:
                          display_recall_card(search_results_df.iloc[item_index_2])
-                # else:
-                #     with col2:
-                #          st.empty() # Streamlit gère les colonnes vides automatiquement
 
-            # Afficher les contrôles de pagination pour la recherche
             display_pagination_controls("search_current_page", total_items_search, items_per_page_search)
 
         elif search_term:
              st.warning(f"Aucun résultat trouvé pour '{search_term}' dans le Motif.")
         else:
             st.info("Entrez un terme dans la barre de recherche pour afficher les résultats (recherche limitée au Motif).")
+
+    with tab4:
+        # --- Contenu de l'onglet Analyse IA ---
+        st.subheader("🤖 Analyse des données filtrées par l'IA")
+        
+        # Afficher la réponse IA stockée
+        if st.session_state.ai_response:
+            st.write("#### Question posée :")
+            st.write(st.session_state.get("last_ai_question", "N/A")) # Afficher la dernière question posée
+            st.write("#### Réponse de l'IA :")
+            st.markdown(st.session_state.ai_response) # Utiliser markdown pour un meilleur formatage
+        else:
+            st.info("Aucune analyse IA n'a été effectuée. Entrez votre clé API et votre question dans la barre latérale et cliquez sur 'Analyser avec l'IA'.")
 
 
     # Footer
@@ -971,4 +1056,8 @@ def main():
 
 # Exécuter l'application
 if __name__ == "__main__":
+    # Initialiser les états de session nécessaires avant toute utilisation
+    # C'est déjà fait au début de main(), mais double-vérification si on lance directement main
+    # Pour éviter des KeyError si main() est appelé en dehors d'un run Streamlit
+    # (Bien que __name__ == "__main__" le protège généralement)
     main()
