@@ -450,7 +450,8 @@ def display_recall_card(row):
         st.markdown(f"<h4>{nom}</h4>", unsafe_allow_html=True)
         st.markdown(f"<p><strong>Marque:</strong> {marque}</p>", unsafe_allow_html=True)
         st.markdown(f"<p><strong>Date de publication:</strong> {date_str}</p>", unsafe_allow_html=True) 
-        st.markdown(f("<p><strong>Catégorie:</strong> {} > {}</p>").format(categorie, sous_categorie), unsafe_allow_html=True) 
+        # CORRECTION : Syntaxe correcte des f-strings, corrigée à nouveau ici
+        st.markdown(f"<p><strong>Catégorie:</strong> {categorie} > {sous_categorie}</p>", unsafe_allow_html=True) 
         st.markdown(f"<p><strong>Risques:</strong> <span class='{risk_class}'>{risques}</span></p>", unsafe_allow_html=True)
         
         # Afficher l'image si disponible, centrée dans la colonne
@@ -531,8 +532,8 @@ def get_groq_response(api_key, model, prompt):
     1.  **Basez-vous UNIQUEMENT** sur les données fournies dans le contexte (Résumé des données et Échantillon de rappels JSON). N'utilisez pas de connaissances externes.
     2.  Le **Résumé des données** vous donne des statistiques générales (top motifs, top risques, etc.). C'est utile pour les tendances générales.
     3.  L'**Échantillon de rappels (JSON)** liste les détails *spécifiques* de chaque rappel de l'échantillon. Ce sont les données *brutes* que vous devez parcourir et analyser pour trouver des informations précises sur des cas particuliers ou des liens entre champs (comme produits et risques).
-    4.  **POUR LES QUESTIONS SPECIFIQUES** (ex: quels produits sont associés à un risque particulier comme "bris de verre", quels distributeurs sont listés pour un motif donné, ou pour obtenir des détails sur des rappels précis), **vous DEVEZ IMPÉRATIVEMENT ANALYSER l'Échantillon de rappels (JSON)**. Parcourez les éléments de cet échantillon (chaque objet JSON dans la liste) et examinez attentivement les champs comme 'nom', 'marque', 'motif', 'risques', 'sous_categorie', etc. Recherchez les termes clés de la question (ex: "verre", "métal", "listeria") dans ces champs.
-    5.  Si vous trouvez des correspondances dans l'échantillon JSON, **liste les produits spécifiques trouvés dans l'échantillon** qui correspondent à la demande. Indiquez leur nom, motif et risque pour chaque produit trouvé.
+    4.  **POUR LES QUESTIONS SPECIFIQUES** (ex: quels produits sont associés à un risque particulier comme "bris de verre", quels distributeurs sont listés pour un motif donné, ou pour obtenir des détails sur des rappels précis), **vous DEVEZ IMPÉRATIVEMENT ANALYSER attentivement l'Échantillon de rappels (JSON)**. Parcourez les éléments de cet échantillon (chaque objet JSON dans la liste) et examinez attentivement les champs comme 'nom', 'marque', 'motif', 'risques', 'sous_categorie', etc. Recherchez les termes clés de la question (ex: "verre", "métal", "listeria") dans ces champs.
+    5.  Si vous trouvez des correspondances dans l'échantillon JSON, **liste les produits spécifiques trouvés dans l'échantillon** qui correspondent à la demande. Indiquez leur nom, motif et risque pour chaque produit trouvé. Si plusieurs produits sont trouvés, listez-les clairement.
     6.  Si une question ne peut pas être répondue avec les données fournies (parce que l'information n'apparaît pas du tout dans le résumé ET n'apparaît pas dans l'échantillon JSON), dites-le clairement (ex: "Je ne dispose pas d'informations suffisantes dans les données fournies pour répondre précisément à cette question. L'information [mentionner le type d'information recherchée, ex: "sur les rappels liés au verre"] n'apparaît pas dans l'échantillon de rappels disponible pour l'analyse.").
     7.  Structurez votre réponse de manière claire, en utilisant des tirets, des listes ou des paragraphes courts. Commencez par répondre directement à la question si possible, puis ajoutez des précisions ou des limitations basées sur les données.
     8.  Soyez concis et allez droit au but.
@@ -556,7 +557,7 @@ def get_groq_response(api_key, model, prompt):
             ],
             model=model,
             temperature=0.1, # Température basse pour des réponses factuelles
-            max_tokens=2000, # Augmente légèrement les tokens max pour une réponse plus complète si nécessaire
+            max_tokens=2500, # Augmente légèrement les tokens max pour une réponse plus complète si nécessaire
         )
         return chat_completion.choices[0].message.content
 
@@ -813,7 +814,7 @@ def main():
     st.subheader("Vue d'overview") # Changed title to avoid confusion with "Analyse IA"
     col1, col2, col3, col4 = st.columns(4)
     
-    # Nombre total de rappels chargés (basé sur le chargement API initial)
+    # Nombre total de rappels chargés (based on the initial API load)
     with col1:
         st.markdown(f"""
         <div class="metric">
@@ -1100,7 +1101,7 @@ def main():
             
             if search_cols_existing:
                  df_filtered_with_search = df_filtered.copy()
-                 # S'assurer que 'motif' est bien traité comme string avant de mettre en minuscule
+                 # CORRECTION: S'assurer que 'motif' est bien traité comme string avant de mettre en minuscule
                  # On accède directement à la colonne 'motif' car search_cols_existing ne contient que 'motif'
                  # S'assurer que la colonne 'motif' existe avant d'essayer d'y accéder
                  if 'motif' in df_filtered_with_search.columns:
