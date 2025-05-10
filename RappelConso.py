@@ -530,7 +530,7 @@ def prepare_data_context(df_filtered):
 
     context = f"Analyse basée sur {total_count} rappels de produits alimentaires publiés entre le {date_min} et le {date_max}. "
 
-    # Ajouter les informations des top N pour les colonnes pertinentes s'ils existent
+    # Ajouter les informations des top N pour les colonnes pertinentes s'ils existent et ne sont pas vides après filtrage
     if 'sous_categorie' in df_filtered.columns and not df_filtered['sous_categorie'].dropna().empty:
         top_subcats = df_filtered['sous_categorie'].value_counts().nlargest(5).to_dict()
         context += f"\nSous-catégories les plus fréquentes : {top_subcats}. "
@@ -554,6 +554,13 @@ def prepare_data_context(df_filtered):
     
     # Ajouter une petite description des données
     context += "\nStructure générale d'un rappel : Nom du produit, Marque, Date de publication, Catégorie/Sous-catégorie, Motif, Risques encourus, Distributeurs, Zone de vente, Conduites à tenir."
+
+    # Inclure les données elles-mêmes en format texte si le nombre est gérable
+    # Par exemple, convertir le DataFrame filtré en string (attention à la taille!)
+    # Un grand DataFrame peut dépasser la limite de tokens du modèle.
+    # On peut limiter le nombre de lignes ou colonnes envoyées.
+    # df_filtered_small = df_filtered[['nom', 'marque', 'motif', 'risques', 'date_str']].head(100) # Limiter à 100 lignes et colonnes clés
+    # context += "\nDonnées filtrées (extrait) :\n" + df_filtered_small.to_string(index=False)
 
 
     return context
@@ -858,6 +865,7 @@ def main():
     st.session_state.ai_question = ai_question # Sauvegarder dans l'état de session
 
     # Bouton pour déclencher l'analyse
+    # Utilisez une clé spécifique pour ce bouton
     analyze_button = st.sidebar.button("Analyser avec l'IA", type="secondary", key="analyze_ai_button")
 
     # --- Logic to trigger AI analysis ---
@@ -897,10 +905,11 @@ def main():
         # Pagination des rappels filtrés
         st.subheader("Liste des rappels filtrés")
         
+        # Slider pour le nombre d'items par page (affecte la pagination principale)
         items_per_page_main = st.select_slider(
             "Rappels par page:",
             options=[5, 10, 20, 50],
-            value=st.session_state.items_per_page_main,
+            value=st.session_state.items_per_page_main, # Utiliser l'état de session
             key="slider_items_per_page_main"
         )
         st.session_state.items_per_page_main = items_per_page_main
@@ -912,20 +921,29 @@ def main():
 
         total_items_main = len(df_filtered)
         
+        # Afficher les rappels de la page actuelle en 2 colonnes
         start_idx_main = (st.session_state.current_page - 1) * items_per_page_main
         end_idx_main = min(start_idx_main + items_per_page_main, total_items_main)
 
         if total_items_main > 0:
-            indices_to_display = range(start_idx_main, end_idx_main)
-            for i in range(0, len(indices_to_display), 2):
+            # Obtenir la sous-section du DataFrame pour la page actuelle
+            page_df_main = df_filtered.iloc[start_idx_main:end_idx_main]
+
+            # Itérer sur les indices de cette sous-section (qui sont 0, 1, 2...) par pas de 2
+            for i in range(0, len(page_df_main), 2):
                 col1, col2 = st.columns(2)
-                item_index_1 = indices_to_display[i]
+                
+                # Afficher le premier produit de la paire en utilisant l'index local 'i'
                 with col1:
-                    display_recall_card(df_filtered.iloc[item_index_1])
-                if i + 1 < len(indices_to_display):
-                    item_index_2 = indices_to_display[i+1]
+                    display_recall_card(page_df_main.iloc[i])
+                
+                # Afficher le deuxième produit si il existe dans la sous-section
+                if i + 1 < len(page_df_main):
                     with col2:
-                         display_recall_card(df_filtered.iloc[item_index_2])
+                         display_recall_card(page_df_main.iloc[i+1])
+                # else:
+                #    with col2:
+                #         st.empty() # Streamlit gère les colonnes vides automatiquement
 
             display_pagination_controls("current_page", total_items_main, items_per_page_main)
 
@@ -994,27 +1012,40 @@ def main():
         # ... (le contenu de l'onglet Recherche rapide reste le même, recherche limitée au motif) ...
         st.subheader("Recherche rapide dans les rappels affichés (champ: Motif)")
         
+        # Utiliser session state pour maintenir la valeur de l'input de recherche
         search_term = st.text_input(
             "Entrez un terme pour rechercher dans le Motif du rappel:",
             placeholder="Ex: listéria, salmonelle, corps étranger",
             value=st.session_state.quick_search_input, # Utiliser l'état de session
             key="quick_search_input" # Clé unique
         )
-        st.session_state.quick_search_input = search_term # Sauvegarder la valeur
+        # CORRECTION: Supprimer la ligne redondante qui écrivait à nouveau dans st.session_state.quick_search_input
+        # st.session_state.quick_search_input = search_term # Sauvegarder la valeur - REDONDANT ET CAUSE L'ERREUR
 
         search_results_df = pd.DataFrame()
+        # Appliquer la recherche si search_term n'est PAS vide (pour éviter de tout afficher par défaut)
         if search_term:
             search_term_lower = search_term.lower()
-            search_cols = ["motif"] # Recherche UNIQUEMENT sur le motif
+            # Colonnes sur lesquelles effectuer la recherche rapide : UNIQUEMENT LE MOTIF
+            search_cols = ["motif"] 
             search_cols_existing = [col for col in search_cols if col in df_filtered.columns]
             
             if search_cols_existing:
                  df_filtered_with_search = df_filtered.copy()
-                 df_filtered_with_search['search_text'] = df_filtered_with_search[search_cols_existing].astype(str).fillna('').agg(' '.join, axis=1).str.lower()
-                 search_results_df = df_filtered_with_search[df_filtered_with_search['search_text'].str.contains(search_term_lower, na=False)].copy()
+                 # Concaténer seulement les colonnes existantes et gérées (ici, juste 'motif')
+                 # S'assurer que 'motif' est bien une chaîne de caractères pour la méthode .str
+                 df_filtered_with_search['search_text'] = df_filtered_with_search[search_cols_existing[0]].astype(str).str.lower() if search_cols_existing else pd.Series("", index=df_filtered_with_search.index)
+
+
+                 # Appliquer le filtre de recherche
+                 search_results_df = df_filtered_with_search[df_filtered_with_search['search_text'].str.contains(search_term_lower, na=False)].copy() # Utiliser .copy() ici aussi
+
+                 # La colonne temporaire 'search_text' n'est pas nécessaire dans le df_filtered original
+                 # Pas besoin de la supprimer si on utilise une copie.
 
             st.markdown(f"**{len(search_results_df)}** résultats trouvés pour '{search_term}' dans le Motif.")
 
+        # Afficher les résultats SEULEMENT si search_term n'est PAS vide ET qu'il y a des résultats
         if search_term and not search_results_df.empty:
             st.markdown("---")
             st.write("Navigation dans les résultats de recherche:")
@@ -1027,36 +1058,46 @@ def main():
             )
             st.session_state.items_per_page_search = items_per_page_search
 
-            current_pagination_state_search = hash((search_term.lower() if search_term else "", items_per_page_search)) # Handle empty search term hash
-            # Réinitialiser seulement si le terme de recherche change ET il n'est pas vide, OU si la pagination_state change
-            if (st.session_state.get("last_search_term", "") != (search_term.lower() if search_term else "") and search_term != "") or \
+            current_pagination_state_search = hash((search_term.lower(), items_per_page_search)) # Hash basé sur le terme actuel
+            # Réinitialiser seulement si le terme de recherche change (et il n'est pas vide), OU si la pagination_state change
+            # On utilise la valeur du widget pour la comparaison
+            if (st.session_state.get("last_search_term", "") != search_term.lower() and search_term.lower() != "") or \
                ("pagination_state_search" not in st.session_state or st.session_state.pagination_state_search != current_pagination_state_search):
                  st.session_state.search_current_page = 1
                  st.session_state.pagination_state_search = current_pagination_state_search
-            st.session_state.last_search_term = search_term.lower() if search_term else "" # Mettre à jour le dernier terme recherché
+            st.session_state.last_search_term = search_term.lower() if search_term else "" # Mettre à jour le dernier terme recherché stocké
 
 
             total_items_search = len(search_results_df)
             start_idx_search = (st.session_state.search_current_page - 1) * items_per_page_search
             end_idx_search = min(start_idx_search + items_per_page_search, total_items_search)
 
-            indices_to_display_search = range(start_idx_search, end_idx_search)
-            for i in range(0, len(indices_to_display_search), 2):
-                col1, col2 = st.columns(2)
-                item_index_1 = indices_to_display_search[i]
-                with col1:
-                    display_recall_card(search_results_df.iloc[item_index_1])
-                if i + 1 < len(indices_to_display_search):
-                    item_index_2 = indices_to_display_search[i+1]
-                    with col2:
-                         display_recall_card(search_results_df.iloc[item_index_2])
+            # Obtenir la sous-section du DataFrame pour la page actuelle de recherche
+            page_df_search = search_results_df.iloc[start_idx_search:end_idx_search]
 
+            # Afficher en 2 colonnes en itérant sur les indices de cette sous-section
+            for i in range(0, len(page_df_search), 2):
+                col1, col2 = st.columns(2)
+                
+                # Afficher le premier produit de la paire en utilisant l'index local 'i'
+                with col1:
+                    display_recall_card(page_df_search.iloc[i])
+                
+                # Afficher le deuxième produit si il existe dans la sous-section
+                if i + 1 < len(page_df_search):
+                    with col2:
+                         display_recall_card(page_df_search.iloc[i+1])
+                # else:
+                #     with col2:
+                #          st.empty() # Streamlit gère les colonnes vides automatiquement
+
+            # Afficher les contrôles de pagination pour la recherche
             display_pagination_controls("search_current_page", total_items_search, items_per_page_search)
 
-        elif search_term:
-             st.warning(f"Aucun résultat trouvé pour '{search_term}' dans le Motif.")
-        else:
-            st.info("Entrez un terme dans la barre de recherche pour afficher les résultats (recherche limitée au Motif).")
+        # Afficher les messages d'info/warning seulement si search_term est vide ou s'il y a une recherche sans résultat
+        elif not search_term:
+             st.info("Entrez un terme dans la barre de recherche pour afficher les résultats (recherche limitée au Motif).")
+        # Le cas else (search_term non vide mais search_results_df vide) est déjà géré par le message "X résultats trouvés pour..."
 
     with tab4:
         # --- Contenu de l'onglet Analyse IA ---
@@ -1084,4 +1125,41 @@ def main():
 
 # Exécuter l'application
 if __name__ == "__main__":
+    # Initialiser les états de session nécessaires avant toute utilisation
+    # C'est fait ici pour garantir que les clés existent avant d'être lues ou écrites
+    # Redondant avec l'initialisation en début de main, mais garantit que si main est appelé
+    # d'une manière inattendue, les clés de base existent.
+    if "rappel_data" not in st.session_state:
+        st.session_state.rappel_data = None
+    if "load_params" not in st.session_state:
+        st.session_state.load_params = None
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = 1
+    if "search_current_page" not in st.session_state:
+        st.session_state.search_current_page = 1
+    if "selected_subcategories" not in st.session_state:
+        st.session_state.selected_subcategories = ["Toutes"]
+    if "selected_brands" not in st.session_state:
+         st.session_state.selected_brands = ["Toutes"]
+    if "selected_risks" not in st.session_state:
+         st.session_state.selected_risks = ["Tous"]
+    if "quick_search_input" not in st.session_state:
+         st.session_state.quick_search_input = ""
+    if "last_search_term" not in st.session_state:
+         st.session_state.last_search_term = ""
+    if "items_per_page_main" not in st.session_state:
+        st.session_state.items_per_page_main = 10
+    if "items_per_page_search" not in st.session_state:
+        st.session_state.items_per_page_search = 10
+    if "groq_api_key" not in st.session_state:
+        st.session_state.groq_api_key = ""
+    if "groq_model" not in st.session_state:
+        st.session_state.groq_model = GROQ_MODELS[0] if GROQ_MODELS else None
+    if "ai_question" not in st.session_state:
+        st.session_state.ai_question = ""
+    if "ai_response" not in st.session_state:
+        st.session_state.ai_response = ""
+    if "last_ai_question" not in st.session_state:
+        st.session_state.last_ai_question = ""
+
     main()
