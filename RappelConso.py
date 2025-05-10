@@ -151,8 +151,14 @@ st.markdown("""
     }
 
      /* Style for AI analysis button */
-     .stButton button[data-testid="stButton"] {
-         /* Find the AI button specifically by its key or location if needed */
+     .stButton button[data-testid^="stButton"] { # Use startswith for potential multiple buttons
+         /* Example styling */
+         background-color: #3498db; /* Blue */
+         color: white;
+     }
+      .stButton button[data-testid^="stButton"]:hover {
+         background-color: #2980b9; /* Darker blue */
+         color: white;
      }
 
 
@@ -181,6 +187,8 @@ def debug_log(message, data=None):
 CATEGORIES = ["alimentation"]
 
 # --- Modèles Groq disponibles ---
+# Récupérer les modèles disponibles via l'API si possible, sinon utiliser une liste statique
+# Note: Récupérer les modèles via l'API ajoute une dépendance au démarrage. Une liste statique est plus simple.
 GROQ_MODELS = ["llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768", "gemma-7b-it"]
 
 # --- Fonction de chargement des données avec cache ---
@@ -232,7 +240,7 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
         debug_log(f"Estimation Total Count API (cat: {actual_category_to_load}, date: >={start_date_str}): {total_count}", data)
         
         if total_count == 0:
-            status_text.warning(f"Aucun rappel trouvé avec les filtres initiaux (catégorie: '{actual_category_to_loaded}').")
+            status_text.warning(f"Aucun rappel trouvé avec les filtres initiaux (catégorie: '{actual_category_to_load}').")
             progress_bar.progress(1.0)
             return pd.DataFrame()
 
@@ -414,8 +422,9 @@ def display_recall_card(row):
         
         st.markdown(f"<h4>{nom}</h4>", unsafe_allow_html=True)
         st.markdown(f"<p><strong>Marque:</strong> {marque}</p>", unsafe_allow_html=True)
-        st.markdown(f("<p><strong>Date de publication:</strong> {}</p>").format(date_str), unsafe_allow_html=True)
-        st.markdown(f("<p><strong>Catégorie:</strong> {} > {}</p>").format(categorie, sous_categorie), unsafe_allow_html=True) # Use > for > in HTML
+        # CORRECTION : Utilisation correcte des f-strings ou .format()
+        st.markdown(f"<p><strong>Date de publication:</strong> {date_str}</p>", unsafe_allow_html=True) # Fixed syntax
+        st.markdown(f"<p><strong>Catégorie:</strong> {categorie} > {sous_categorie}</p>", unsafe_allow_html=True) # Fixed syntax
         st.markdown(f"<p><strong>Risques:</strong> <span class='{risk_class}'>{risques}</span></p>", unsafe_allow_html=True)
         
         # Afficher l'image si disponible, centrée dans la colonne
@@ -505,7 +514,9 @@ def get_groq_response(api_key, model, prompt):
 
     except Exception as e:
         debug_log("Erreur API Groq", e)
-        return f"Une erreur est survenue lors de l'appel à l'API Groq : {e}"
+        # Cacher la clé API dans le message d'erreur public
+        error_message = str(e).replace(api_key, "[Votre Clé API]")
+        return f"Une erreur est survenue lors de l'appel à l'API Groq : {error_message}"
 
 # Fonction pour préparer le contexte des données filtrées pour l'IA
 def prepare_data_context(df_filtered):
@@ -519,23 +530,30 @@ def prepare_data_context(df_filtered):
 
     context = f"Analyse basée sur {total_count} rappels de produits alimentaires publiés entre le {date_min} et le {date_max}. "
 
-    if 'sous_categorie' in df_filtered.columns:
+    # Ajouter les informations des top N pour les colonnes pertinentes s'ils existent
+    if 'sous_categorie' in df_filtered.columns and not df_filtered['sous_categorie'].dropna().empty:
         top_subcats = df_filtered['sous_categorie'].value_counts().nlargest(5).to_dict()
         context += f"\nSous-catégories les plus fréquentes : {top_subcats}. "
 
-    if 'motif' in df_filtered.columns:
+    if 'motif' in df_filtered.columns and not df_filtered['motif'].dropna().empty:
         top_motifs = df_filtered['motif'].value_counts().nlargest(5).to_dict()
         context += f"\nMotifs de rappel les plus fréquents : {top_motifs}. "
 
-    if 'risques' in df_filtered.columns:
+    if 'risques' in df_filtered.columns and not df_filtered['risques'].dropna().empty:
         top_risks = df_filtered['risques'].value_counts().nlargest(5).to_dict()
         context += f"\nRisques les plus fréquents : {top_risks}. "
+        
+    if 'marque' in df_filtered.columns and not df_filtered['marque'].dropna().empty:
+        top_brands = df_filtered['marque'].value_counts().nlargest(5).to_dict()
+        context += f"\nMarques avec le plus de rappels : {top_brands}. "
+
 
     # Optionnel : Ajouter quelques exemples de rappels (limité pour le contexte)
     # C'est souvent plus efficace d'envoyer un résumé + les colonnes disponibles
     context += f"\nColonnes disponibles dans les données : {list(df_filtered.columns)}. "
-    # context += "\nExemples de rappels (limité) :\n"
-    # context += df_filtered[['nom', 'marque', 'motif', 'risques', 'date_str']].head(5).to_string(index=False) # Ajouter quelques colonnes pertinentes
+    
+    # Ajouter une petite description des données
+    context += "\nStructure générale d'un rappel : Nom du produit, Marque, Date de publication, Catégorie/Sous-catégorie, Motif, Risques encourus, Distributeurs, Zone de vente, Conduites à tenir."
 
 
     return context
@@ -543,6 +561,7 @@ def prepare_data_context(df_filtered):
 # --- Fonction principale ---
 def main():
     # Initialiser les états de session nécessaires avant toute utilisation
+    # C'est fait ici pour garantir que les clés existent avant d'être lues ou écrites
     if "rappel_data" not in st.session_state:
         st.session_state.rappel_data = None
     if "load_params" not in st.session_state:
@@ -559,6 +578,8 @@ def main():
          st.session_state.selected_risks = ["Tous"]
     if "quick_search_input" not in st.session_state:
          st.session_state.quick_search_input = ""
+    if "last_search_term" not in st.session_state: # Pour la réinitialisation de la pagination de recherche
+         st.session_state.last_search_term = ""
     if "items_per_page_main" not in st.session_state:
         st.session_state.items_per_page_main = 10 # Default 10 items total per page (5 pairs)
     if "items_per_page_search" not in st.session_state:
@@ -567,11 +588,14 @@ def main():
     if "groq_api_key" not in st.session_state:
         st.session_state.groq_api_key = ""
     if "groq_model" not in st.session_state:
-        st.session_state.groq_model = GROQ_MODELS[0] if GROQ_MODELS else ""
+        # Sélectionner le premier modèle disponible si la liste n'est pas vide, sinon None
+        st.session_state.groq_model = GROQ_MODELS[0] if GROQ_MODELS else None
     if "ai_question" not in st.session_state:
         st.session_state.ai_question = ""
     if "ai_response" not in st.session_state:
         st.session_state.ai_response = ""
+    if "last_ai_question" not in st.session_state: # Pour afficher la question avec la réponse
+        st.session_state.last_ai_question = ""
 
 
     # En-tête
@@ -582,9 +606,10 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    # --- Sidebar pour les filtres de chargement ---
-    st.sidebar.title("Paramètres de chargement")
-    
+    # --- Sidebar pour les paramètres ---
+    st.sidebar.title("Paramètres")
+
+    st.sidebar.subheader("Chargement des données")
     # Sélection de la catégorie (fixe à alimentation selon la demande)
     st.sidebar.write("Catégorie chargée: **alimentation**")
     selected_category_loading = "alimentation" # <--- Fixe la catégorie pour le chargement
@@ -628,10 +653,11 @@ def main():
         st.session_state.selected_risks = ["Tous"]
         st.session_state.current_page = 1 # Reset main list pagination
         st.session_state.search_current_page = 1 # Reset search results pagination
-        # Ne pas réinitialiser l'input de recherche, l'utilisateur pourrait vouloir relancer la même recherche
-        # st.session_state.quick_search_input = "" # Clear search input
+        st.session_state.last_search_term = "" # Reset search term state
+        st.session_state.quick_search_input = "" # Clear search input
         # Réinitialiser la réponse IA
         st.session_state.ai_response = ""
+        st.session_state.last_ai_question = ""
 
 
         status_message.empty() # Clear the loading message (if it was there)
@@ -653,7 +679,7 @@ def main():
 
     # --- Filtres post-chargement (dans la barre latérale) ---
     st.sidebar.markdown("---")
-    st.sidebar.title("Filtres d'analyse")
+    st.sidebar.subheader("Filtres d'analyse")
 
     # Filtre Sous-catégorie
     # Utiliser un set pour les options pour éviter les doublons même si dropna est appelé
@@ -717,6 +743,10 @@ def main():
         with tab2: st.info("Aucune donnée à visualiser avec les filtres sélectionnés.")
         with tab3: st.info("Aucune donnée à rechercher avec les filtres sélectionnés.")
         with tab4: st.info("Aucune donnée disponible pour l'analyse IA avec les filtres sélectionnés.")
+
+        # Réinitialiser la réponse IA si le filtre devient vide
+        st.session_state.ai_response = ""
+        st.session_state.last_ai_question = ""
 
         return # Arrêter l'exécution de main() ici si df_filtered est vide
 
@@ -793,7 +823,7 @@ def main():
 
     # --- Section Analyse IA dans la Sidebar ---
     st.sidebar.markdown("---")
-    st.sidebar.title("🤖 Analyse IA")
+    st.sidebar.subheader("🤖 Analyse IA")
     st.sidebar.info("Analysez les données filtrées à l'aide de l'IA Groq.")
 
     # Input Clé API Groq
@@ -828,7 +858,7 @@ def main():
     st.session_state.ai_question = ai_question # Sauvegarder dans l'état de session
 
     # Bouton pour déclencher l'analyse
-    analyze_button = st.sidebar.button("Analyser avec l'IA", type="secondary")
+    analyze_button = st.sidebar.button("Analyser avec l'IA", type="secondary", key="analyze_ai_button")
 
     # --- Logic to trigger AI analysis ---
     if analyze_button:
@@ -838,8 +868,8 @@ def main():
              st.sidebar.error("Veuillez sélectionner un modèle Groq.")
          elif not ai_question:
              st.sidebar.warning("Veuillez poser une question.")
-         elif df_filtered.empty:
-              st.sidebar.warning("Aucune donnée filtrée à analyser. Veuillez charger des données ou ajuster les filtres.")
+         # La vérification de df_filtered.empty est faite plus haut dans main()
+         # et le return arrête l'exécution si les données filtrées sont vides.
          else:
              # Préparer le prompt pour l'IA
              data_context = prepare_data_context(df_filtered)
@@ -848,15 +878,11 @@ def main():
              # Appeler l'API Groq avec un spinner
              with st.spinner("L'IA analyse les données..."):
                  st.session_state.ai_response = get_groq_response(groq_api_key, groq_model, full_prompt)
+                 st.session_state.last_ai_question = ai_question # Sauvegarder la question posée
 
-             # Forcer le passage à l'onglet Analyse IA après la réponse
-             # On ne peut pas changer l'onglet directement dans la sidebar
-             # On pourrait utiliser un paramètre d'URL ou une astuce JS si nécessaire,
-             # mais pour l'instant, l'utilisateur devra cliquer sur l'onglet.
              st.toast("Analyse IA terminée !", icon="🤖")
-             # Potentiellement stocker l'état de l'onglet sélectionné pour y aller automatiquement
-             # st.session_state.current_tab = "Analyse IA" # Exemple (non implémenté dans ce code)
-             st.rerun() # Rerun pour mettre à jour l'affichage principal avec la réponse
+             # Rerun pour mettre à jour l'affichage principal avec la réponse
+             st.rerun()
 
 
     # --- Afficher les onglets (avec le nouvel onglet IA) ---
@@ -903,8 +929,7 @@ def main():
 
             display_pagination_controls("current_page", total_items_main, items_per_page_main)
 
-        else:
-            st.info("Aucun rappel à afficher avec les filtres actuels.")
+        # else: (message déjà géré par le bloc 'if df_filtered.empty' plus haut)
 
 
     with tab2:
@@ -980,7 +1005,7 @@ def main():
         search_results_df = pd.DataFrame()
         if search_term:
             search_term_lower = search_term.lower()
-            search_cols = ["motif"]
+            search_cols = ["motif"] # Recherche UNIQUEMENT sur le motif
             search_cols_existing = [col for col in search_cols if col in df_filtered.columns]
             
             if search_cols_existing:
@@ -1002,13 +1027,14 @@ def main():
             )
             st.session_state.items_per_page_search = items_per_page_search
 
-            current_pagination_state_search = hash((search_term_lower, items_per_page_search))
+            current_pagination_state_search = hash((search_term.lower() if search_term else "", items_per_page_search)) # Handle empty search term hash
             # Réinitialiser seulement si le terme de recherche change ET il n'est pas vide, OU si la pagination_state change
-            if (st.session_state.get("last_search_term", "") != search_term_lower and search_term_lower != "") or \
+            if (st.session_state.get("last_search_term", "") != (search_term.lower() if search_term else "") and search_term != "") or \
                ("pagination_state_search" not in st.session_state or st.session_state.pagination_state_search != current_pagination_state_search):
                  st.session_state.search_current_page = 1
                  st.session_state.pagination_state_search = current_pagination_state_search
-            st.session_state.last_search_term = search_term_lower
+            st.session_state.last_search_term = search_term.lower() if search_term else "" # Mettre à jour le dernier terme recherché
+
 
             total_items_search = len(search_results_df)
             start_idx_search = (st.session_state.search_current_page - 1) * items_per_page_search
@@ -1034,16 +1060,18 @@ def main():
 
     with tab4:
         # --- Contenu de l'onglet Analyse IA ---
-        st.subheader("🤖 Analyse des données filtrées par l'IA")
+        st.subheader("🤖 Analyse des données filtrées par l'IA Groq")
         
         # Afficher la réponse IA stockée
         if st.session_state.ai_response:
             st.write("#### Question posée :")
-            st.write(st.session_state.get("last_ai_question", "N/A")) # Afficher la dernière question posée
+            # Afficher la dernière question posée
+            st.markdown(st.session_state.get("last_ai_question", "N/A")) 
             st.write("#### Réponse de l'IA :")
-            st.markdown(st.session_state.ai_response) # Utiliser markdown pour un meilleur formatage
+            # Afficher la réponse de l'IA formatée
+            st.markdown(st.session_state.ai_response) 
         else:
-            st.info("Aucune analyse IA n'a été effectuée. Entrez votre clé API et votre question dans la barre latérale et cliquez sur 'Analyser avec l'IA'.")
+            st.info("Aucune analyse IA n'a été effectuée. Entrez votre clé API et votre question dans la section 'Analyse IA' de la barre latérale et cliquez sur 'Analyser avec l'IA'.")
 
 
     # Footer
@@ -1056,8 +1084,4 @@ def main():
 
 # Exécuter l'application
 if __name__ == "__main__":
-    # Initialiser les états de session nécessaires avant toute utilisation
-    # C'est déjà fait au début de main(), mais double-vérification si on lance directement main
-    # Pour éviter des KeyError si main() est appelé en dehors d'un run Streamlit
-    # (Bien que __name__ == "__main__" le protège généralement)
     main()
