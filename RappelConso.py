@@ -193,7 +193,7 @@ CATEGORIES = ["alimentation"]
 # --- Modèles Groq disponibles ---
 # Récupérer les modèles disponibles via l'API si possible, sinon utiliser une liste statique
 # Note: Récupérer les modèles via l'API ajoute une dépendance au démarrage. Une liste statique est plus simple.
-GROQ_MODELS = ["llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768", "gemma-7b-it"]
+GROQ_MODELS = ["llama3-8b-8192", "llama3-70b-8192", "deepseek-r1-distill-llama-70b", "llama-3.3-70b-versatile"]
 
 # --- Fonction de chargement des données avec cache ---
 @st.cache_data(ttl=3600, show_spinner=False) # Cache pendant 1 heure, cache key dépend des paramètres
