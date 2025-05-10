@@ -175,7 +175,11 @@ def debug_log(message, data=None):
         if data is not None:
              # Use a more compact representation for debug data in sidebar
             if isinstance(data, (dict, list)):
-                 st.sidebar.json(data) # Use json for dict/list
+                 try:
+                      st.sidebar.json(data) # Use json for dict/list
+                 except Exception as e:
+                      st.sidebar.write(f"Cannot display data as JSON: {e}")
+                      st.sidebar.write(data) # Fallback to writing raw data
             elif isinstance(data, pd.DataFrame):
                 st.sidebar.dataframe(data.head()) # Use dataframe for pandas
             else:
@@ -595,18 +599,28 @@ def prepare_data_context(df_filtered):
 
     # Limiter à un nombre raisonnable de rappels pour ne pas dépasser la limite de tokens
     sample_size = min(len(df_filtered), 50) 
-    # Utiliser head(sample_size) pour les plus récents
+    # Utiliser head(sample_size) pour les plus récents et sélectionner seulement les colonnes pertinentes
     df_sample = df_filtered[relevant_cols_existing].head(sample_size) 
 
     context_sample = ""
     if not df_sample.empty:
+        # CORRECTION : Convertir explicitement l'échantillon entier en chaîne de caractères avant de le sérialiser
+        # Cela résout les problèmes potentiels avec des types non standards dans certaines cellules.
+        df_sample_str = df_sample.astype(str) 
+        
         context_sample = "\n\nÉchantillon de rappels (format JSON, limité aux colonnes pertinentes et premières lignes) :\n"
         # Convertir l'échantillon en string JSON. Utiliser default=str pour gérer les types non sérialisables si nécessaire.
         # Ignorer les erreurs si la conversion JSON échoue pour certaines valeurs
-        context_sample += df_sample.to_json(orient='records', indent=2, default=str, force_ascii=False) # force_ascii=False pour garder les accents
+        # force_ascii=False pour garder les accents
+        try:
+            context_sample += df_sample_str.to_json(orient='records', indent=2, force_ascii=False, default=str) 
+        except Exception as e:
+             debug_log("Error converting sample to JSON after astype(str)", e)
+             # Afficher un message d'erreur plus explicite si la conversion JSON échoue
+             context_sample = f"\nÉchantillon de rappels : Échantillon non disponible en raison d'une erreur de formatage JSON ({e}).\n" 
+
 
     full_context = context_summary + context_sample
-
     return full_context
 
 # --- Fonction principale ---
@@ -802,7 +816,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
     
-    # Nombre de rappels filtrés actuellement affichés (basé sur df_filtered)
+    # Nombre de rappels filtrés actuellement affichés (based on df_filtered)
     with col2:
          st.markdown(f"""
          <div class="metric">
@@ -849,9 +863,18 @@ def main():
     # --- Bouton de téléchargement pour les données filtrées ---
     if not df_filtered.empty:
          st.markdown("---") # Séparateur visuel
+         # Correction : Générer le CSV à la demande dans le lambda pour s'assurer qu'il est à jour
+         @st.cache_data(ttl=60) # Cache le CSV pour 60s pour éviter de le regénérer à chaque rerun mineur
+         def convert_df_to_csv(df):
+             # Utiliser .copy() ici avant to_csv pour éviter les SettingWithCopyWarning potentielles
+             # si df_filtered_copy était modifiée avant le to_csv
+             return df.to_csv(index=False).encode('utf-8')
+
+         csv_data = convert_df_to_csv(df_filtered)
+
          st.download_button(
              label="Télécharger les données filtrées (CSV)",
-             data=df_filtered.to_csv(index=False).encode('utf-8'),
+             data=csv_data,
              file_name=f'rappelconso_alimentation_depuis_{start_date.strftime("%Y-%m-%d")}_filtered.csv',
              mime='text/csv',
              key="download_filtered_csv" # Clé unique
@@ -942,10 +965,18 @@ def main():
         )
         st.session_state.items_per_page_main = items_per_page_main
 
-        current_pagination_state_main = hash((tuple(selected_subcategories), tuple(selected_brands), tuple(selected_risks), items_per_page_main))
-        if "pagination_state_main" not in st.session_state or st.session_state.pagination_state_main != current_pagination_state_main:
-             st.session_state.current_page = 1
-             st.session_state.pagination_state_main = current_pagination_state_main
+        # Recalculer le hash de pagination si les filtres ou le nombre d'items par page changent
+        current_pagination_state_main = hash((
+            tuple(st.session_state.selected_subcategories),
+            tuple(st.session_state.selected_brands),
+            tuple(st.session_state.selected_risks),
+            items_per_page_main
+        ))
+        
+        # Comparer le hash actuel avec le dernier hash enregistré pour la pagination principale
+        if st.session_state.get("pagination_state_main") != current_pagination_state_main:
+             st.session_state.current_page = 1 # Réinitialiser à la page 1 si les filtres/items par page changent
+             st.session_state.pagination_state_main = current_pagination_state_main # Mettre à jour le hash enregistré
 
         total_items_main = len(df_filtered)
         
@@ -955,9 +986,11 @@ def main():
 
         if total_items_main > 0:
             # CORRECTION: Obtenir la sous-section du DataFrame pour la page actuelle
-            page_df_main = df_filtered.iloc[start_idx_main:end_idx_main].reset_index(drop=True) # Reset index for iloc usage
-
+            # Utiliser .iloc pour la sélection par position, puis reset_index pour avoir des indices 0, 1, 2... sur la page
+            page_df_main = df_filtered.iloc[start_idx_main:end_idx_main].reset_index(drop=True) 
+            
             # Itérer sur les indices locaux de cette sous-section (0, 1, 2...) par pas de 2
+            # len(page_df_main) donne le nombre d'éléments sur la page actuelle
             for i in range(0, len(page_df_main), 2):
                 col1, col2 = st.columns(2)
                 
@@ -1097,7 +1130,8 @@ def main():
             end_idx_search = min(start_idx_search + items_per_page_search, total_items_search)
 
             # CORRECTION: Obtenir la sous-section du DataFrame pour la page actuelle de recherche
-            page_df_search = search_results_df.iloc[start_idx_search:end_idx_search].reset_index(drop=True) # Reset index for iloc usage
+            # Utiliser .iloc pour la sélection par position, puis reset_index pour avoir des indices 0, 1, 2... sur la page
+            page_df_search = search_results_df.iloc[start_idx_search:end_idx_search].reset_index(drop=True) 
 
             # Afficher en 2 colonnes en itérant sur les indices locaux de cette sous-section
             for i in range(0, len(page_df_search), 2):
@@ -1157,7 +1191,7 @@ if __name__ == "__main__":
     if "items_per_page_search" not in st.session_state: st.session_state.items_per_page_search = 10
     if "groq_api_key" not in st.session_state: st.session_state.groq_api_key = ""
     # Correction ici : s'assurer que l'état groq_model est un modèle valide dès l'initialisation
-    if "groq_model" not in st.session_state or st.session_state.groq_model not in GROQ_MODELS:
+    if "groq_model" not in st.session_state or (st.session_state.groq_model is not None and st.session_state.groq_model not in GROQ_MODELS):
         st.session_state.groq_model = GROQ_MODELS[0] if GROQ_MODELS else None # Utiliser le premier modèle comme défaut si la liste n'est pas vide
     if "ai_question" not in st.session_state: st.session_state.ai_question = ""
     if "ai_response" not in st.session_state: st.session_state.ai_response = ""
