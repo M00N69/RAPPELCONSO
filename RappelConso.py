@@ -7,6 +7,7 @@ import plotly.express as px
 import numpy as np
 import math
 from groq import Groq # Importez la librairie Groq
+import json # Pour une gestion potentielle plus fine du JSON de l'échantillon
 
 # --- Configuration de la page ---
 st.set_page_config(
@@ -526,10 +527,10 @@ def get_groq_response(api_key, model, prompt):
     
     Consignes importantes :
     1.  **Basez-vous UNIQUEMENT** sur les données fournies dans le contexte. N'utilisez pas de connaissances externes.
-    2.  Le contexte contient un **Résumé des données** et un **Échantillon de rappels** (JSON). L'échantillon JSON fournit les détails *spécifiques* de chaque rappel listé.
-    3.  Si une question peut être répondue en analysant le **Résumé des données** (ex: les motifs les plus fréquents, les dates extrêmes), faites-le.
-    4.  Si une question nécessite de trouver des rappels *spécifiques* ou des liens *entre* les informations de différents rappels (ex: quels produits sont associés à un risque particulier, quels distributeurs sont listés pour un motif donné), **analysez l'Échantillon de rappels (JSON)** pour trouver les occurrences et les détails nécessaires.
-    5.  Si une question ne peut pas être répondue avec les données fournies (parce que l'information est absente du résumé et n'apparaît pas dans l'échantillon JSON), dites-le clairement (ex: "Je ne dispose pas d'informations suffisantes dans les données fournies pour répondre précisément à cette question. L'information n'apparaît pas dans l'échantillon de rappels disponible pour l'analyse.").
+    2.  Le contexte contient un **Résumé des données** (qui donne des statistiques générales) et un **Échantillon de rappels** (JSON) qui liste les détails *spécifiques* de chaque rappel de l'échantillon.
+    3.  Pour répondre à des questions sur les liens *spécifiques* entre les rappels (ex: quels produits sont associés à un risque particulier comme "bris de verre", quels distributeurs sont listés pour un motif donné), **vous DEVEZ ANALYSER l'Échantillon de rappels (JSON)** pour trouver les occurrences et les détails nécessaires. Le résumé statistique seul ne contient pas ces détails individuels.
+    4.  Si une question peut être répondue en analysant le **Résumé des données** (ex: les motifs les plus fréquents, les dates extrêmes), utilisez-le.
+    5.  Si une question ne peut pas être répondue avec les données fournies (parce que l'information n'apparaît pas du tout dans le résumé ET n'apparaît pas dans l'échantillon JSON), dites-le clairement (ex: "Je ne dispose pas d'informations suffisantes dans les données fournies pour répondre précisément à cette question. L'information n'apparaît pas dans l'échantillon de rappels disponible pour l'analyse.").
     6.  Pour les questions demandant des tendances, des causes principales, des répartitions, ou des caractéristiques, utilisez les statistiques du résumé et complétez/illustrez avec des exemples pertinents de l'échantillon JSON si possible.
     7.  Structurez votre réponse de manière claire, en utilisant des tirets, des listes ou des paragraphes courts.
     8.  Soyez concis et allez droit au but.
@@ -603,7 +604,8 @@ def prepare_data_context(df_filtered):
 
     # Limiter à un nombre *très* raisonnable de rappels pour l'échantillon JSON
     # L'objectif est de fournir des exemples, pas une base de données complète
-    sample_size = min(len(df_filtered), 20) # Réduit la taille de l'échantillon
+    # Réduction de l'échantillon pour une meilleure fiabilité
+    sample_size = min(len(df_filtered), 10) # Réduit la taille de l'échantillon encore plus
     # Utiliser head(sample_size) pour les plus récents
     df_sample = df_filtered[relevant_cols_existing].head(sample_size) 
 
@@ -618,7 +620,12 @@ def prepare_data_context(df_filtered):
         # Utiliser .to_json sur le DataFrame déjà converti en string pour éviter les erreurs de sérialisation
         # force_ascii=False pour garder les accents
         try:
-            context_sample += df_sample_str.to_json(orient='records', indent=2, force_ascii=False) 
+            # Utiliser .to_json sur le DataFrame déjà converti en string pour éviter les erreurs de sérialisation
+            # Utilisation de json.dumps pour plus de contrôle et de robustesse si pandas.to_json a des soucis
+            # Convertir le DataFrame en liste de dictionnaires, puis dumper avec json
+            list_of_dicts = df_sample_str.to_dict(orient='records')
+            context_sample += json.dumps(list_of_dicts, indent=2, ensure_ascii=False)
+
         except Exception as e:
              debug_log("Error converting sample to JSON after astype(str)", e)
              # Afficher un message d'erreur plus explicite si la conversion JSON échoue
