@@ -210,7 +210,8 @@ def load_rappel_data(start_date: date = None, category: str = "alimentation", ma
 
     params = {
         "limit": 100, # Limite par page, max 100 dans l'API
-        "offset": 0
+        "offset": 0,
+        "sort": "-date_publication" # Ajouter ce paramètre pour trier par date de publication descendante
     }
     
     # Ajouter un filtre de catégorie
